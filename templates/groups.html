@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}گروه‌ها - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-users"></i> گروه‌ها ({{ groups|length }})</h2>
+
+<div class="card-custom">
+    <div class="card-body">
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>نام گروه</th>
+                    <th>یوزرنیم</th>
+                    <th>اعضا</th>
+                    <th>تاریخ اضافه شدن</th>
+                    <th>عملیات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in groups %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ group.title }}</td>
+                    <td>
+                        {% if group.username %}
+                            <a href="https://t.me/{{ group.username }}" target="_blank" style="color: #a5b4fc;">@{{ group.username }}</a>
+                        {% else %}
+                            <span style="color: #6b7280;">ندارد</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge bg-primary">{{ group.member_count }}</span></td>
+                    <td>{{ group.added_at }}</td>
+                    <td>
+                        <a href="{{ url_for('group_detail', chat_id=group.chat_id) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye"></i> جزئیات
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
