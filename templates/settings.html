@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}تنظیمات - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-cog"></i> تنظیمات</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-lock"></i> تغییر رمز عبور پنل
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">رمز عبور جدید:</label>
+                        <input type="password" name="panel_password" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save"></i> ذخیره
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> اطلاعات سیستم
+            </div>
+            <div class="card-body">
+                <p><strong>نسخه:</strong> v2.0</p>
+                <p><strong>اسم ربات:</strong> قاسم کتلت</p>
+                <p><strong>یوزرنیم:</strong> @whatcore_bot</p>
+                <p><strong>بیس داده:</strong> SQLite</p>
+                <p><strong>پورت:</strong> 5001</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}پایگاه داده - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-database"></i> پایگاه داده</h2>
+
+{% for table_name, table_data in tables.items() %}
+<div class="card-custom">
+    <div class="card-header">
+        <i class="fas fa-table"></i> {{ table_name }} <span class="badge bg-primary">{{ table_data.count }} رکورد</span>
+    </div>
+    <div class="card-body" style="overflow-x: auto;">
+        {% if table_data.rows %}
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    {% for col in table_data.columns %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_data.rows %}
+                <tr>
+                    {% for col in table_data.columns %}
+                    <td style="font-size: 0.8rem;">{{ row[col] or '-' }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #6b7280;">جدول خالی است</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}ارسال پیام - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-broadcast-tower"></i> ارسال پیام به همه گروه‌ها</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-edit"></i> نوشتن پیام
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">متن پیام:</label>
+                        <textarea name="message" class="form-control" rows="6" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-paper-plane"></i> ارسال به {{ groups|length }} گروه
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-list"></i> گروه‌های دریافت‌کننده
+            </div>
+            <div class="card-body">
+                <ul style="list-style: none; padding: 0; color: #a5b4fc;">
+                    {% for g in groups %}
+                    <li style="padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <i class="fas fa-users" style="margin-left: 10px;"></i>
+                        {{ g.title }} <span style="color: #6b7280;">({{ g.chat_id }})</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

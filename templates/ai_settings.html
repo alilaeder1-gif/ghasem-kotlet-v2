@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}تنظیمات AI - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-brain"></i> تنظیمات هوش مصنوعی ({{ personas|length }})</h2>
+
+<div class="card-custom">
+    <div class="card-body">
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>گروه</th>
+                    <th>اسم</th>
+                    <th>پرامپت</th>
+                    <th>وضعیت</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in personas %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ p.group_title[:25] }}...</td>
+                    <td><strong>{{ p.persona_name }}</strong></td>
+                    <td style="font-size: 0.8rem;">{{ p.system_prompt[:80] }}{% if p.system_prompt|length > 80 %}...{% endif %}</td>
+                    <td>
+                        {% if p.is_enabled %}
+                            <span class="badge bg-success">فعال</span>
+                        {% else %}
+                            <span class="badge bg-secondary">غیرفعال</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

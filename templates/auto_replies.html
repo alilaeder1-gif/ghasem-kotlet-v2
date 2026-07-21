@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}پاسخ خودکار - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-reply"></i> پاسخ‌های خودکار ({{ replies|length }})</h2>
+
+<div class="card-custom">
+    <div class="card-body">
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>کلمه کلیدی</th>
+                    <th>پاسخ</th>
+                    <th>گروه</th>
+                    <th>Regex</th>
+                    <th>ساخته شده</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in replies %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><span class="badge bg-info">{{ r.keyword }}</span></td>
+                    <td>{{ r.response[:60] }}{% if r.response|length > 60 %}...{% endif %}</td>
+                    <td style="font-size: 0.8rem;">{{ r.group_title[:25] }}...</td>
+                    <td>{% if r.is_regex %}<span class="badge bg-warning">بله</span>{% else %}<span class="badge bg-secondary">خیر</span>{% endif %}</td>
+                    <td>{{ r.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

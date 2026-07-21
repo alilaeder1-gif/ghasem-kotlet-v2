@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}دستورات سفارشی - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-terminal"></i> دستورات سفارشی ({{ commands|length }})</h2>
+
+<div class="card-custom">
+    <div class="card-body">
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>دستور</th>
+                    <th>پاسخ</th>
+                    <th>گروه</th>
+                    <th>ساخته شده</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cmd in commands %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><code style="background: rgba(99,102,241,0.2); padding: 2px 8px; border-radius: 5px;">/{{ cmd.command }}</code></td>
+                    <td>{{ cmd.response[:60] }}{% if cmd.response|length > 60 %}...{% endif %}</td>
+                    <td style="font-size: 0.8rem;">{{ cmd.group_title[:25] }}...</td>
+                    <td>{{ cmd.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

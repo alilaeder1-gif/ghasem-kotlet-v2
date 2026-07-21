@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}کاربران - پنل مدیریت{% endblock %}
+
+{% block content %}
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-user"></i> کاربران ({{ users|length }})</h2>
+
+<div class="card-custom">
+    <div class="card-body">
+        <table class="table table-custom">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>نام</th>
+                    <th>یوزرنیم</th>
+                    <th>آیدی</th>
+                    <th>گروه‌ها</th>
+                    <th>مجموع پیام</th>
+                    <th>آخرین حضور</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ user.full_name }}</td>
+                    <td>{% if user.username %}@{{ user.username }}{% else %}-{% endif %}</td>
+                    <td style="font-size: 0.8rem;">{{ user.user_id }}</td>
+                    <td><span class="badge bg-primary">{{ user.group_count }}</span></td>
+                    <td><span class="badge bg-success">{{ user.total_messages }}</span></td>
+                    <td>{{ user.last_seen or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
