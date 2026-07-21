@@ -6,12 +6,17 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 AI_MODEL = os.getenv("AI_MODEL", "meta-llama/Llama-3-8B-Instruct")
-
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_data.db")
 
-db_dir = os.path.dirname(DATABASE_PATH)
-if db_dir:
-    os.makedirs(db_dir, exist_ok=True)
+REDIS_URL = os.getenv("REDIS_URL", "")
+REDIS_ENABLED = bool(REDIS_URL)
+
+if DATABASE_PATH == '/app/data/bot_data.db':
+    db_dir = '/app/data'
+    try:
+        os.makedirs(db_dir, exist_ok=True)
+    except:
+        DATABASE_PATH = '/app/bot_data.db'
 
 WELCOME_MESSAGE = os.getenv(
     "WELCOME_MESSAGE",

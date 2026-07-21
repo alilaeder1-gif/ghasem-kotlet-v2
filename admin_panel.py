@@ -2,19 +2,34 @@ import os
 import sys
 import sqlite3
 import hashlib
+import json
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import BOT_TOKEN, DATABASE_PATH
+from config import BOT_TOKEN, DATABASE_PATH, REDIS_URL, REDIS_ENABLED
 
 app = Flask(__name__)
 app.secret_key = 'ghasem-kotlet-secret-key-2024'
 
+redis_client = None
+if REDIS_ENABLED:
+    try:
+        import redis
+        redis_client = redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=3)
+        redis_client.ping()
+    except:
+        redis_client = None
+
 
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
+    db_path = DATABASE_PATH
+    for path in [db_path, '/app/bot_data.db', '/tmp/bot_data.db', 'bot_data.db']:
+        if os.path.exists(path):
+            db_path = path
+            break
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute('CREATE TABLE IF NOT EXISTS panel_config (key TEXT PRIMARY KEY, value TEXT)')
     conn.commit()

@@ -3,8 +3,9 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from config import BOT_TOKEN, DATABASE_PATH
+from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
+from cache import cache
 from handlers import admin, welcome, rules, spam, ai_chat, misc, custom, persona, group_tracker, force_sub
 from middlewares.anti_flood import AntiFloodMiddleware
 
@@ -26,6 +27,12 @@ async def main():
     await db.connect()
     logger.info("پایگاه داده متصل شد.")
 
+    await cache.connect()
+    if cache.enabled:
+        logger.info("Redis متصل شد.")
+    else:
+        logger.info("Redis فعال نیست (کش غیرفعال)")
+
     dp.message.middleware(AntiFloodMiddleware())
 
     dp.include_router(admin.router)
@@ -44,6 +51,7 @@ async def main():
         await dp.start_polling(bot)
     finally:
         await db.close()
+        await cache.close()
         await bot.session.close()
         logger.info("ربات متوقف شد.")
 

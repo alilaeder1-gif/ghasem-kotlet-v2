@@ -1,14 +1,29 @@
 import aiosqlite
+import os
 from config import DATABASE_PATH
+
+CANDIDATE_PATHS = [
+    DATABASE_PATH,
+    '/app/bot_data.db',
+    '/tmp/bot_data.db',
+    'bot_data.db',
+]
 
 
 class Database:
     def __init__(self, db_path: str = DATABASE_PATH):
         self.db_path = db_path
+        self.resolved_path = None
         self.db: aiosqlite.Connection | None = None
 
     async def connect(self):
-        self.db = await aiosqlite.connect(self.db_path)
+        for path in CANDIDATE_PATHS:
+            if os.path.exists(path):
+                self.resolved_path = path
+                break
+        if not self.resolved_path:
+            self.resolved_path = self.db_path
+        self.db = await aiosqlite.connect(self.resolved_path)
         self.db.row_factory = aiosqlite.Row
         await self._create_tables()
 

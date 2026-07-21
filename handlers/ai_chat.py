@@ -3,6 +3,7 @@ from aiogram import Router, F
 from aiogram.types import Message
 from config import HUGGINGFACE_API_KEY, AI_MODEL
 from database import db
+from cache import cache
 
 router = Router()
 
@@ -18,6 +19,10 @@ DEFAULT_PROMPT = (
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
     if not HUGGINGFACE_API_KEY:
         return "⚠️ کلید API تنظیم نشده. لطفاً HUGGINGFACE_API_KEY رو در فایل .env تنظیم کنید."
+
+    cached = await cache.get_ai_response(user_message, system_prompt or DEFAULT_PROMPT)
+    if cached:
+        return cached
 
     prompt = system_prompt or DEFAULT_PROMPT
     messages = [{"role": "system", "content": prompt}]
@@ -35,10 +40,13 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                 if resp.status == 200:
                     data = await resp.json()
                     if isinstance(data, list) and data:
-                        return data[0].get("generated_text", "پاسخی دریافت نشد.")
+                        response = data[0].get("generated_text", "پاسخی دریافت نشد.")
                     elif isinstance(data, dict):
-                        return data.get("generated_text", "پاسخی دریافت نشد.")
-                    return "پاسخی دریافت نشد."
+                        response = data.get("generated_text", "پاسخی دریافت نشد.")
+                    else:
+                        response = "پاسخی دریافت نشد."
+                    await cache.cache_ai_response(user_message, prompt, response)
+                    return response
                 elif resp.status == 503:
                     return "⏳ مدل در حال بارگذاری است، لطفاً چند لحظه صبر کنید."
                 else:
