@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import hashlib
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
@@ -11,13 +12,40 @@ from config import BOT_TOKEN, DATABASE_PATH
 app = Flask(__name__)
 app.secret_key = 'ghasem-kotlet-secret-key-2024'
 
-PANEL_PASSWORD = os.getenv('PANEL_PASSWORD', 'admin123')
-
 
 def get_db():
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute('CREATE TABLE IF NOT EXISTS panel_config (key TEXT PRIMARY KEY, value TEXT)')
+    conn.commit()
     return conn
+
+
+def hash_pass(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def check_password(password):
+    conn = get_db()
+    row = conn.execute("SELECT value FROM panel_config WHERE key='password'").fetchone()
+    conn.close()
+    if row:
+        return hash_pass(password) == row['value']
+    return password == 'admin123'
+
+
+def set_password(password):
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO panel_config (key, value) VALUES ('password', ?)", (hash_pass(password),))
+    conn.commit()
+    conn.close()
+
+
+def is_first_run():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM panel_config WHERE key='password'").fetchone()
+    conn.close()
+    return row is None
 
 
 def login_required(f):
@@ -31,12 +59,35 @@ def login_required(f):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if is_first_run():
+        return redirect(url_for('setup'))
+
     if request.method == 'POST':
-        if request.form.get('password') == PANEL_PASSWORD:
+        if check_password(request.form.get('password', '')):
             session['logged_in'] = True
             return redirect(url_for('dashboard'))
         flash('رمز عبور اشتباه!', 'error')
     return render_template('login.html')
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if not is_first_run():
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        p1 = request.form.get('password', '')
+        p2 = request.form.get('confirm', '')
+        if len(p1) < 4:
+            flash('رمز عبور باید حداقل ۴ کاراکتر باشه!', 'error')
+        elif p1 != p2:
+            flash('رمز عبور با تکرارش یکی نیست!', 'error')
+        else:
+            set_password(p1)
+            session['logged_in'] = True
+            flash('تنظیمات اولیه با موفقیت انجام شد!', 'success')
+            return redirect(url_for('dashboard'))
+    return render_template('setup.html')
 
 
 @app.route('/logout')
@@ -53,7 +104,6 @@ def dashboard():
     users = conn.execute('SELECT COUNT(DISTINCT user_id) as cnt FROM group_users').fetchone()['cnt']
     total_msgs = conn.execute('SELECT COALESCE(SUM(message_count),0) as t FROM group_users').fetchone()['t']
     cmds = conn.execute('SELECT COUNT(*) as cnt FROM custom_commands').fetchone()['cnt']
-    
     top_groups = conn.execute('SELECT * FROM bot_groups WHERE is_active=1 ORDER BY member_count DESC LIMIT 5').fetchall()
     recent_users = conn.execute('SELECT gu.*, bg.title FROM group_users gu JOIN bot_groups bg ON gu.chat_id=bg.chat_id ORDER BY gu.last_seen DESC LIMIT 10').fetchall()
     conn.close()
@@ -108,18 +158,17 @@ def ai_settings():
         prompt = request.form.get('system_prompt', '').strip()
         enabled = 1 if request.form.get('is_enabled') else 0
         action = request.form.get('action', '')
-
         if action == 'delete':
             conn.execute('DELETE FROM ai_persona WHERE chat_id=?', (chat_id,))
             flash('شخصیت حذف شد!', 'success')
         elif chat_id and name and prompt:
-            conn.execute('INSERT OR REPLACE INTO ai_persona (chat_id, persona_name, system_prompt, is_enabled) VALUES (?,?,?,?)',
-                         (chat_id, name, prompt, enabled))
+            conn.execute('INSERT OR REPLACE INTO ai_persona (chat_id, persona_name, system_prompt, is_enabled) VALUES (?,?,?,?)', (chat_id, name, prompt, enabled))
             flash('تنظیمات AI ذخیره شد!', 'success')
-        elif chat_id:
+        elif not chat_id:
+            flash('گروه رو انتخاب کن!', 'error')
+        else:
             flash('همه فیلدها رو پر کن!', 'error')
         conn.commit()
-
     personas = conn.execute('SELECT ap.*, bg.title FROM ai_persona ap LEFT JOIN bot_groups bg ON ap.chat_id=bg.chat_id').fetchall()
     groups = conn.execute('SELECT chat_id, title FROM bot_groups WHERE is_active=1').fetchall()
     conn.close()
@@ -156,9 +205,7 @@ def broadcast():
             ok, fail = 0, 0
             for g in groups:
                 try:
-                    r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-                                      json={'chat_id': g['chat_id'], 'text': msg, 'parse_mode': 'HTML'},
-                                      timeout=10)
+                    r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', json={'chat_id': g['chat_id'], 'text': msg, 'parse_mode': 'HTML'}, timeout=10)
                     if r.status_code == 200: ok += 1
                     else: fail += 1
                 except: fail += 1
@@ -190,19 +237,20 @@ def database_viewer():
 @login_required
 def settings():
     if request.method == 'POST':
-        pp = request.form.get('panel_password', '').strip()
-        if pp:
-            env_path = os.path.join(os.path.dirname(__file__), '.env')
-            with open(env_path, 'r') as f:
-                c = f.read()
-            if 'PANEL_PASSWORD=' in c:
-                import re
-                c = re.sub(r'PANEL_PASSWORD=.*', f'PANEL_PASSWORD={pp}', c)
+        action = request.form.get('action', '')
+        if action == 'change_password':
+            old = request.form.get('old_password', '')
+            new = request.form.get('new_password', '')
+            confirm = request.form.get('confirm_password', '')
+            if not check_password(old):
+                flash('رمز فعلی اشتباه!', 'error')
+            elif len(new) < 4:
+                flash('رمز جدید باید حداقل ۴ کاراکتر باشه!', 'error')
+            elif new != confirm:
+                flash('رمز جدید با تکرارش یکی نیست!', 'error')
             else:
-                c += f'\nPANEL_PASSWORD={pp}'
-            with open(env_path, 'w') as f:
-                f.write(c)
-            flash('رمز عبور تغییر کرد. برای اعمال، پنل رو ری‌استارت کنید.', 'success')
+                set_password(new)
+                flash('رمز عبور با موفقیت تغییر کرد!', 'success')
     return render_template('settings.html')
 
 

@@ -3,22 +3,31 @@
 {% block title %}تنظیمات - پنل مدیریت{% endblock %}
 
 {% block content %}
-<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-cog"></i> تنظیمات</h2>
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-cog"></i> تنظیمات پنل</h2>
 
 <div class="row">
     <div class="col-md-6">
         <div class="card-custom">
             <div class="card-header">
-                <i class="fas fa-lock"></i> تغییر رمز عبور پنل
+                <i class="fas fa-key"></i> تغییر رمز عبور
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="action" value="change_password">
                     <div class="mb-3">
-                        <label style="color: #a5b4fc;">رمز عبور جدید:</label>
-                        <input type="password" name="panel_password" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                        <label style="color: #a5b4fc;">رمز فعلی:</label>
+                        <input type="password" name="old_password" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">رمز جدید:</label>
+                        <input type="password" name="new_password" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required minlength="4">
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">تکرار رمز جدید:</label>
+                        <input type="password" name="confirm_password" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required minlength="4">
                     </div>
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-save"></i> ذخیره
+                        <i class="fas fa-save"></i> تغییر رمز
                     </button>
                 </form>
             </div>
@@ -30,11 +39,12 @@
                 <i class="fas fa-info-circle"></i> اطلاعات سیستم
             </div>
             <div class="card-body">
-                <p><strong>نسخه:</strong> v2.0</p>
-                <p><strong>اسم ربات:</strong> قاسم کتلت</p>
-                <p><strong>یوزرنیم:</strong> @whatcore_bot</p>
-                <p><strong>بیس داده:</strong> SQLite</p>
-                <p><strong>پورت:</strong> 5001</p>
+                <table class="table table-custom">
+                    <tr><td><strong>نسخه:</strong></td><td>v2.0</td></tr>
+                    <tr><td><strong>اسم ربات:</strong></td><td>قاسم کتلت</td></tr>
+                    <tr><td><strong>یوزرنیم:</strong></td><td>@whatcore_bot</td></tr>
+                    <tr><td><strong>بیس داده:</strong></td><td>SQLite</td></tr>
+                </table>
             </div>
         </div>
     </div>
