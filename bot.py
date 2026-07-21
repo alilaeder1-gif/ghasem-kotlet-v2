@@ -1,0 +1,52 @@
+import asyncio
+import logging
+from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
+from config import BOT_TOKEN, DATABASE_PATH
+from database import db
+from handlers import admin, welcome, rules, spam, ai_chat, misc, custom, persona, group_tracker, force_sub
+from middlewares.anti_flood import AntiFloodMiddleware
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+async def main():
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN تنظیم نشده!")
+        return
+
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
+
+    await db.connect()
+    logger.info("پایگاه داده متصل شد.")
+
+    dp.message.middleware(AntiFloodMiddleware())
+
+    dp.include_router(admin.router)
+    dp.include_router(welcome.router)
+    dp.include_router(rules.router)
+    dp.include_router(spam.router)
+    dp.include_router(custom.router)
+    dp.include_router(persona.router)
+    dp.include_router(group_tracker.router)
+    dp.include_router(force_sub.router)
+    dp.include_router(ai_chat.router)
+    dp.include_router(misc.router)
+
+    logger.info("ربات شروع به کار کرد!")
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await db.close()
+        await bot.session.close()
+        logger.info("ربات متوقف شد.")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
