@@ -8,9 +8,10 @@ from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
 from cache import cache
-from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub
+from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
+from handlers.fun import reminder_worker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +54,9 @@ async def main():
     dp.include_router(persona.router)
     dp.include_router(group_tracker.router)
     dp.include_router(force_sub.router)
+    dp.include_router(fun.router)
+
+    asyncio.create_task(reminder_worker())
 
     @dp.message(F.text)
     async def ai_chat_handler(message: Message):
