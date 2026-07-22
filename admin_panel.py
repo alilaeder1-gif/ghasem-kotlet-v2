@@ -17,7 +17,10 @@ redis_client = None
 if REDIS_ENABLED:
     try:
         import redis
-        redis_client = redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=3)
+        kwargs = {"decode_responses": True, "socket_connect_timeout": 5, "socket_timeout": 5, "retry_on_timeout": True}
+        if REDIS_URL.startswith("rediss://"):
+            kwargs["ssl_cert_reqs"] = None
+        redis_client = redis.from_url(REDIS_URL, **kwargs)
         redis_client.ping()
     except:
         redis_client = None

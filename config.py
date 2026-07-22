@@ -8,7 +8,7 @@ HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 AI_MODEL = os.getenv("AI_MODEL", "meta-llama/Llama-3-8B-Instruct")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_data.db")
 
-REDIS_URL = os.getenv("REDIS_URL", "")
+REDIS_URL = os.getenv("REDIS_URL", "") or os.getenv("REDIS_TLS_URL", "") or ""
 REDIS_ENABLED = bool(REDIS_URL)
 
 if DATABASE_PATH == '/app/data/bot_data.db':

@@ -1,37 +1,54 @@
 import json
 import hashlib
+import logging
 from config import REDIS_URL, REDIS_ENABLED
 
+logger = logging.getLogger(__name__)
+
+REDIS_AVAILABLE = False
 try:
     import redis.asyncio as aioredis
+    REDIS_AVAILABLE = True
 except:
-    REDIS_ENABLED = False
+    try:
+        from redis import asyncio as aioredis
+        REDIS_AVAILABLE = True
+    except:
+        pass
 
 
 class Cache:
     def __init__(self):
         self.client = None
-        self.enabled = REDIS_ENABLED
+        self.enabled = REDIS_ENABLED and REDIS_AVAILABLE
 
     async def connect(self):
-        if not self.enabled or not REDIS_URL:
+        if not REDIS_URL or not REDIS_AVAILABLE:
             self.enabled = False
             return
         try:
-            self.client = aioredis.from_url(
-                REDIS_URL,
-                decode_responses=True,
-                socket_connect_timeout=3,
-                socket_timeout=3,
-            )
+            kwargs = {
+                "decode_responses": True,
+                "socket_connect_timeout": 5,
+                "socket_timeout": 5,
+                "retry_on_timeout": True,
+                "health_check_interval": 30,
+            }
+            if REDIS_URL.startswith("rediss://"):
+                kwargs["ssl_cert_reqs"] = None
+            self.client = aioredis.from_url(REDIS_URL, **kwargs)
             await self.client.ping()
+            self.enabled = True
         except:
             self.enabled = False
             self.client = None
 
     async def close(self):
         if self.client:
-            await self.client.close()
+            try:
+                await self.client.close()
+            except:
+                pass
 
     async def get(self, key: str) -> str | None:
         if not self.enabled or not self.client:
