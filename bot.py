@@ -80,6 +80,10 @@ async def main():
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await ask_ai(user_msg, system_prompt)
 
+        if response.startswith("⚠") or response.startswith("⏳"):
+            await message.reply(response)
+            return
+
         audio_path = await text_to_speech(response)
         if audio_path:
             try:
