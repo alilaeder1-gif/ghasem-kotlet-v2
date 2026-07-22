@@ -18,6 +18,31 @@ DEFAULT_PROMPT = (
     "پاسخ‌هایت کوتاه و مناسب گروه باشد."
 )
 
+_chatbot = None
+
+
+def get_chatbot():
+    global _chatbot
+    if _chatbot is not None:
+        return _chatbot
+    try:
+        import hugchat
+        from hugchat.login import Login
+        hf_email = os.getenv("HF_EMAIL", "")
+        hf_pass = os.getenv("HF_PASSWORD", "")
+        if hf_email and hf_pass:
+            sign = Login(hf_email, hf_pass)
+            cookies = sign.login()
+            _chatbot = hugchat.ChatBot(cookies=cookies.get_dict())
+        else:
+            import requests
+            cookies = requests.get("https://huggingface.co/chat/").cookies
+            _chatbot = hugchat.ChatBot(cookies=cookies.get_dict())
+        return _chatbot
+    except Exception as e:
+        logger.error(f"Chatbot init error: {e}")
+        return None
+
 
 async def text_to_speech(text: str) -> str | None:
     try:
@@ -31,74 +56,45 @@ async def text_to_speech(text: str) -> str | None:
         return None
 
 
-async def resolve_hostname(hostname: str) -> str | None:
+def _call_chat(user_message: str, system_prompt: str) -> str:
+    chatbot = get_chatbot()
+    if not chatbot:
+        return "⚠️ خطا: اتصال به HuggingFace Chat برقرار نشد."
+
     try:
-        import dns.resolver
-        resolver = dns.resolver.Resolver(configure=False)
-        resolver.nameservers = ['8.8.8.8', '1.1.1.1']
-        resolver.timeout = 3
-        resolver.lifetime = 5
-        answers = await asyncio.to_thread(resolver.resolve, hostname, 'A')
-        return str(answers[0])
-    except:
-        return None
-
-
-async def _call_huggingface_async(url: str, headers: dict, payload: dict) -> str:
-    import httpx
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        ip = await resolve_hostname(parsed.hostname)
-        if ip:
-            url = url.replace(parsed.hostname, ip)
-            headers["Host"] = parsed.hostname
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                if isinstance(data, list) and data:
-                    text = data[0].get("generated_text", "")
-                    return text or "پاسخی دریافت نشد."
-                elif isinstance(data, dict):
-                    return data.get("generated_text", "پاسخی دریافت نشد.")
-                return f"⚠️ خطا: {str(data)[:200]}"
-            elif resp.status_code == 503:
-                return "⏳ مدل در حال بارگذاری است، لطفاً چند لحظه صبر کنید."
-            else:
-                return f"⚠️ خطا: {resp.status_code} - {resp.text[:200]}"
+        conversation_id = chatbot.new_conversation(
+            model=AI_MODEL,
+            system_prompt=system_prompt,
+            turn=1
+        )
+        chatbot.change_conversation(conversation_id)
+        response = ""
+        for resp in chatbot.chat(user_message):
+            if resp:
+                if isinstance(resp, dict) and "token" in resp:
+                    response += resp["token"]
+                elif isinstance(resp, str):
+                    response += resp
+        try:
+            chatbot.delete_conversation(conversation_id)
+        except:
+            pass
+        return response.strip() or "پاسخی دریافت نشد."
     except Exception as e:
+        try:
+            chatbot.delete_conversation(conversation_id)
+        except:
+            pass
         return f"⚠️ خطا در اتصال: {str(e)[:200]}"
 
 
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
-    if not HUGGINGFACE_API_KEY:
-        return "⚠️ کلید API تنظیم نشده. لطفاً HUGGINGFACE_API_KEY رو در فایل .env تنظیم کنید."
-
     prompt = system_prompt or DEFAULT_PROMPT
     cached = await cache.get_ai_response(user_message, prompt)
     if cached:
         return cached
 
-    messages_list = [{"role": "system", "content": prompt}]
-    if chat_history:
-        messages_list.extend(chat_history[-6:])
-    messages_list.append({"role": "user", "content": user_message})
-
-    chat_prompt = format_llama3_prompt(messages_list)
-    url = f"https://api-inference.huggingface.co/models/{AI_MODEL}"
-    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
-    payload = {
-        "inputs": chat_prompt,
-        "parameters": {
-            "max_new_tokens": 512,
-            "temperature": 0.7,
-            "return_full_text": False
-        }
-    }
-
-    response = await _call_huggingface_async(url, headers, payload)
+    response = await asyncio.to_thread(_call_chat, user_message, prompt)
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
