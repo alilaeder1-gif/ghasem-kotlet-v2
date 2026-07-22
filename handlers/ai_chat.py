@@ -1,3 +1,4 @@
+print("=== AI_CHAT MODULE LOADED ===", flush=True)
 import aiohttp
 import logging
 import os
@@ -92,6 +93,7 @@ def format_chat_prompt(messages: list) -> str:
 
 @router.message()
 async def ai_chat_handler(message: Message):
+    print(f"=== AI_CHAT HANDLER FIRED: chat_type={message.chat.type} ===", flush=True)
     user_msg = (message.text or message.caption or "").strip()
     logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, has_text={bool(user_msg)}")
 
