@@ -1,6 +1,10 @@
+import asyncio
 import aiosqlite
 import os
+import logging
 from config import DATABASE_PATH
+
+logger = logging.getLogger(__name__)
 
 CANDIDATE_PATHS = [
     DATABASE_PATH,
@@ -17,10 +21,26 @@ class Database:
         self.db: aiosqlite.Connection | None = None
 
     async def connect(self):
-        for path in CANDIDATE_PATHS:
-            if os.path.exists(path):
-                self.resolved_path = path
+        for attempt in range(5):
+            for path in CANDIDATE_PATHS:
+                if os.path.exists(path):
+                    self.resolved_path = path
+                    break
+            if self.resolved_path:
                 break
+            db_dir = os.path.dirname(self.db_path)
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+                test_file = os.path.join(db_dir, '.write_test')
+                with open(test_file, 'w') as f:
+                    f.write('ok')
+                os.remove(test_file)
+                self.resolved_path = self.db_path
+                break
+            except:
+                pass
+            if attempt < 4:
+                await asyncio.sleep(2)
         if not self.resolved_path:
             self.resolved_path = self.db_path
         self.db = await aiosqlite.connect(self.resolved_path)
