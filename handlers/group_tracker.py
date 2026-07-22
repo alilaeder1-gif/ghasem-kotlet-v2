@@ -6,6 +6,25 @@ from database import db
 router = Router()
 
 
+@router.message(F.chat.type.in_({"group", "supergroup"}))
+async def track_group(message: Message):
+    await db.add_group(message.chat.id, message.chat.title or "بدون نام", message.chat.username or "")
+    try:
+        member_count = await message.bot.get_chat_member_count(message.chat.id)
+        await db.update_group_member_count(message.chat.id, member_count)
+    except:
+        pass
+
+
+@router.message(Command("sync"))
+async def sync_groups(message: Message):
+    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+        return await message.reply("فقط ادمین اصلی می‌تونه این کار رو بکنه.")
+
+    await track_group(message)
+    return await message.reply("✅ گروه همگام‌سازی شد. حالا توی پنل می‌بینی.")
+
+
 @router.chat_member(ChatMemberUpdatedFilter(member_status_changed="left -> joined"))
 async def on_bot_added(event: ChatMemberUpdated):
     chat = event.chat
