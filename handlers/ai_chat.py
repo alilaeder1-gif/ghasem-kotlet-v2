@@ -78,7 +78,19 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         }
     }
 
-    response = await _call_huggingface_async(url, headers, payload)
+    urls = [
+        f"https://router.huggingface.co/hf-inference/models/{AI_MODEL}",
+        f"https://api-inference.huggingface.co/models/{AI_MODEL}",
+    ]
+
+    last_error = None
+    for url in urls:
+        response = await _call_huggingface_async(url, headers, payload)
+        if not response.startswith("⚠"):
+            break
+        last_error = response
+    else:
+        response = last_error
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
