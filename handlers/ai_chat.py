@@ -1,9 +1,12 @@
 import aiohttp
+import logging
 from aiogram import Router, F
 from aiogram.types import Message
 from config import HUGGINGFACE_API_KEY, AI_MODEL
 from database import db
 from cache import cache
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -25,20 +28,22 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         return cached
 
     prompt = system_prompt or DEFAULT_PROMPT
-    messages = [{"role": "system", "content": prompt}]
+    messages_list = [{"role": "system", "content": prompt}]
     if chat_history:
-        messages.extend(chat_history[-6:])
-    messages.append({"role": "user", "content": user_message})
+        messages_list.extend(chat_history[-6:])
+    messages_list.append({"role": "user", "content": user_message})
 
     url = f"https://api-inference.huggingface.co/models/{AI_MODEL}"
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
-    payload = {"messages": messages, "max_new_tokens": 512, "temperature": 0.7, "return_full_text": False}
+    payload = {"inputs": format_chat_prompt(messages_list), "parameters": {"max_new_tokens": 512, "temperature": 0.7, "return_full_text": False}}
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                body = await resp.text()
                 if resp.status == 200:
-                    data = await resp.json()
+                    import json
+                    data = json.loads(body)
                     if isinstance(data, list) and data:
                         response = data[0].get("generated_text", "پاسخی دریافت نشد.")
                     elif isinstance(data, dict):
@@ -50,14 +55,30 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                 elif resp.status == 503:
                     return "⏳ مدل در حال بارگذاری است، لطفاً چند لحظه صبر کنید."
                 else:
-                    return f"⚠️ خطا: {resp.status}"
+                    return f"⚠️ خطا: {resp.status} - {body[:200]}"
     except Exception as e:
-        return f"⚠️ خطا در اتصال: {str(e)[:100]}"
+        return f"⚠️ خطا در اتصال: {str(e)[:150]}"
+
+
+def format_chat_prompt(messages: list) -> str:
+    formatted = ""
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "system":
+            formatted += f"<|system|>\n{content}\n"
+        elif role == "user":
+            formatted += f"<|user|>\n{content}\n"
+        elif role == "assistant":
+            formatted += f"<|assistant|>\n{content}\n"
+    formatted += "<|assistant|>\n"
+    return formatted
 
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def ai_chat_handler(message: Message):
     user_msg = message.text.strip()
+    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, text={user_msg[:50]}")
 
     if message.chat.type in ("group", "supergroup"):
         bot_info = await message.bot.get_me()
@@ -71,6 +92,7 @@ async def ai_chat_handler(message: Message):
         )
 
         if not is_mention and not is_reply:
+            logger.info("Not a mention or reply in group, skipping")
             return
 
         if is_mention:
@@ -81,15 +103,17 @@ async def ai_chat_handler(message: Message):
 
     persona = await db.get_persona(message.chat.id)
     if persona and not persona["enabled"]:
+        logger.info("AI disabled for this chat")
         return
 
     system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
 
     await message.chat.send_action("typing")
     response = await ask_ai(user_msg, system_prompt)
+    logger.info(f"AI response: {response[:100]}")
     await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
 
     try:
         await message.reply(response)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Failed to reply: {e}")
