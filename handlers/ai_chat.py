@@ -23,25 +23,27 @@ def get_deepseek():
     global _deepseek_client
     if _deepseek_client is not None:
         return _deepseek_client
-    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        api_key = os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
     try:
         from openai import OpenAI
-        _deepseek_client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        _deepseek_client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
         return _deepseek_client
     except Exception as e:
-        logger.error(f"DeepSeek init error: {e}")
+        logger.error(f"Groq init error: {e}")
         return None
 
 
 def _call_deepseek(user_message: str, system_prompt: str) -> str:
     client = get_deepseek()
     if not client:
-        return "⚠️ خطا: DEEPSEEK_API_KEY تنظیم نشده."
+        return "⚠️ خطا: GROQ_API_KEY تنظیم نشده."
     try:
         resp = client.chat.completions.create(
-            model="deepseek-chat",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
