@@ -1,0 +1,241 @@
+قاسم کتلت - مستندات کامل پروژه
+==================================
+
+1. اکانت ها
+-----------
+
+  سرويس          | اكانت            | لينک
+  ----------------|------------------|------------------------------------
+  GitHub          | alilaeder1-gif   | https://github.com/alilaeder1-gif
+  Railway         | alilaeder1-gif   | https://railway.app
+  HuggingFace     | alilaeder1-gif   | https://huggingface.co
+  Telegram        | @whatcore_bot    | https://t.me/whatcore_bot
+
+
+2. سکرت ها
+----------
+
+  (مقادير واقعي در فايل .env هستند)
+
+  متغير                    | توضيح                     | منبع
+  -------------------------|---------------------------|------------------------------
+  BOT_TOKEN                | توکن ربات تلگرام          | @BotFather
+  HUGGINGFACE_API_KEY      | کليد API HuggingFace      | huggingface.co/settings/tokens
+  PANEL_PASSWORD           | رمز پنل ادمين             | admin123 (اولين بار تغيير بديد)
+  AI_MODEL                 | مدل هوش مصنوعي            | meta-llama/Llama-3-8B-Instruct
+
+
+3. سرورها
+---------
+
+  Railway (Production):
+    پلتفرم    : Railway.app
+    آدرس پنل  : https://ghasem-kotlet-v2.up.railway.app
+    پورت      : 8080
+    ديتابيس   : /app/data/bot_data.db
+    Redis     : اختیاری (Plugin Railway)
+    Logs      : Railway Dashboard > Deployments > Logs
+
+  محلي (Local):
+    مسير      : E:\DNS.Jumper.2.2\telegram-bot\
+    پنل ادمين : http://localhost:5001
+    ديتابيس   : bot_data.db
+
+
+4. رپو گيتهاب
+-------------
+
+  URL       : https://github.com/alilaeder1-gif/ghasem-kotlet-v2
+  شاخه اصلي : main
+  دسترسي    : عمومي
+
+
+5. ساختار پروژه
+---------------
+
+  telegram-bot/
+  +-- bot.py              # ربات تلگرام (aiogram 3)
+  +-- admin_panel.py      # پنل مديريت وب (Flask)
+  +-- start.py            # اجراي همزمان ربات + پنل
+  +-- init_db.py          # مقداردهي اوليه ديتابيس
+  +-- config.py           # تنظيمات از .env
+  +-- database.py         # کلس ديتابيس SQLite
+  +-- cache.py            # کش Redis (اختیاري)
+  +-- requirements.txt    # وابستگي‌ها
+  +-- Dockerfile          # داکر فايل
+  +-- railway.json        # تنظيمات Railway
+  +-- PROJECT_INFO.txt    # همين فايل
+  |
+  +-- handlers/           # هندلرهاي ربات
+  |   +-- admin.py        # بن/کيک/ميوت/پين
+  |   +-- welcome.py      # خوشامدگويي خودکار
+  |   +-- rules.py        # قوانين گروه
+  |   +-- spam.py         # تشخيص و حذف اسپم
+  |   +-- ai_chat.py      # چت هوشمند با HuggingFace
+  |   +-- custom.py       # دستورات سفارشي
+  |   +-- persona.py      # شخصيت هوش مصنوعي
+  |   +-- group_tracker.py# رديابي گروه‌ها و کاربران
+  |   +-- force_sub.py    # عضويت اجباري کانال
+  |   +-- misc.py         # دستورات متفرقه
+  |
+  +-- middlewares/
+  |   +-- anti_flood.py   # جلوگيري از flood
+  |
+  +-- templates/          # قالب‌هاي پنل ادمين
+  |   +-- base.html
+  |   +-- login.html
+  |   +-- setup.html
+  |   +-- dashboard.html
+  |   +-- groups.html
+  |   +-- group_detail.html
+  |   +-- users.html
+  |   +-- commands.html
+  |   +-- auto_replies.html
+  |   +-- ai_settings.html
+  |   +-- broadcast.html
+  |   +-- database.html
+  |   +-- settings.html
+  |
+  +-- utils/
+      +-- helpers.py
+
+
+6. ديتابيس (SQLite)
+--------------------
+
+  جدول                | توضيح
+  --------------------|-----------------------------------
+  welcome_settings    | تنظيمات خوشامدگويي هر گروه
+  rules               | قوانين هر گروه
+  spam_log            | لاگ پيام‌هاي اسپم
+  banned_users        | کاربران بن شده
+  muted_users         | کاربران ميوت شده
+  chat_history        | تاريخچه چت با هوش مصنوعي
+  ai_persona          | شخصيت هوش مصنوعي هر گروه
+  custom_commands     | دستورات سفارشي ادمين‌ها
+  auto_replies        | پاسخ‌هاي خودکار
+  bot_groups          | گروه‌هايي که ربات عضو است
+  group_users         | کاربران هر گروه
+  group_settings      | تنظيمات اختصاصي هر گروه
+  panel_config        | تنظيمات پنل ادمين
+
+
+7. API هاي استفاده شده
+-----------------------
+
+  HuggingFace Inference : https://api-inference.huggingface.co/models/{MODEL}
+  Telegram Bot API      : https://api.telegram.org/bot{TOKEN}/{METHOD}
+
+
+8. دستورات ربات
+---------------
+
+  مديريت گروه:
+    /ban       - بن کاربر (با ريپلاي)           [ادمين]
+    /unban     - آنب بن کاربر                    [ادمين]
+    /kick      - کيک کاربر از گروه              [ادمين]
+    /mute      - ميوت کاربر                     [ادمين]
+    /unmute    - آنميوت کاربر                   [ادمين]
+    /pin       - پين کردن پيام                  [ادمين]
+    /setrules  - تنظيم قوانين گروه              [ادمين]
+    /setwelcome- تنظيم پيام خوشامدگويي          [ادمين]
+    /forcesub  - عضويت اجباري در کانال          [ادمين]
+
+  شخصي‌سازي هوش مصنوعي:
+    /setname    - تغيير اسم هوش مصنوعي
+    /setprompt  - تغيير شخصيت هوش مصنوعي
+    /toggleai   - فعال/غيرفعال کردن AI
+    /showprompt - نمايش تنظيمات فعلي
+    /aiexamples - مثال‌هاي پرامپت
+
+  دستورات سفارشي:
+    /setcmd     - ساخت دستور سفارشي جديد
+    /delcmd     - حذف دستور سفارشي
+    /listcmds   - ليست دستورات سفارشي
+    /setreply   - تنظيم پاسخ خودکار
+    /delreply   - حذف پاسخ خودکار
+    /listreplies- ليست پاسخ‌هاي خودکار
+
+  عمومي و مديريت کل:
+    /start      - شروع ربات                     [همه]
+    /help       - راهنما                         [همه]
+    /rules      - نمايش قوانين                  [همه]
+    /stats      - آمار گروه                     [همه]
+    /userinfo   - اطلاعات کاربر                 [همه]
+    /mygroups   - ليست گروه‌ها                  [ادمين کل]
+    /groupstats - آمار کامل گروه                [ادمين کل]
+    /broadcast  - ارسال پيام به همه گروه‌ها     [ادمين کل]
+
+
+9. پنل ادمين
+------------
+
+  آدرس              | بخش              | توضيح
+  ------------------|------------------|--------------------------------
+  /                 | داشبورد          | آمار کلي پروژه
+  /groups           | گروه‌ها           | ليست همه گروه‌ها
+  /group/{id}       | جزئيات گروه      | کاربران، تنظيمات، دستورات
+  /users            | کاربران          | ليست همه کاربران
+  /ai-settings      | تنظيمات AI       | مديريت شخصيت هر گروه
+  /commands         | دستورات سفارشي   | مشاهده همه دستورات
+  /auto-replies     | پاسخ خودکار      | مشاهده همه پاسخ‌ها
+  /broadcast        | ارسال پيام       | ارسال به همه گروه‌ها
+  /database         | ديتابيس          | مشاهده مستقيم ديتابيس
+  /settings         | تنظيمات          | تغيير رمز پنل
+
+
+10. ديپلوي Railway
+------------------
+
+  متغيرهاي اجباري:
+    BOT_TOKEN           = (از .env)
+    HUGGINGFACE_API_KEY = (از .env)
+    DATABASE_PATH       = /app/data/bot_data.db
+
+  متغيرهاي اختياري:
+    AI_MODEL        = meta-llama/Llama-3-8B-Instruct
+    REDIS_URL       = (از Plugin Railway)
+    SPAM_THRESHOLD  = 5
+    FLOOD_THRESHOLD = 3
+
+  مراحل:
+    1. اتصال GitHub به Railway
+    2. انتخاب رپو ghasem-kotlet-v2
+    3. تنظيم متغيرهاي محيطي
+    4. ديپلوي
+    5. (اختياري) افزودن Redis Plugin
+
+  لاگ موفق:
+    Database initialized: /app/data/bot_data.db
+    All tables created successfully!
+    پايگاه داده متصل شد.
+    ربات شروع به کار کرد!
+
+
+11. عيب يابي
+------------
+
+  مشکل                                      | راه حل
+  ------------------------------------------|----------------------------------------
+  unable to open database file              | Railway Volume رو چک کن، دوباره ديپلوي کن
+  Conflict: terminated by other getUpdates  | فقط يک نمونه ربات اجرا باشه
+  مدل HuggingFace لود نمیشه                  | اولين بار 1-2 دقيقه طول ميکشه
+  پنل ادمين کار نميکنه                       | Railway URL رو چک کن
+  Redis وصل نميشه                            | Redis Plugin رو اضافه کن
+
+
+12. اطلاعات کلي
+----------------
+
+  نام پروژه    : قاسم کتلت
+  نوع          : ربات مديريت گروه تلگرام
+  زبان         : Python 3.11
+  فريم‌ورک ربات: aiogram 3
+  فريم‌ورک پنل : Flask
+  ديتابيس     : SQLite
+  کش          : Redis (اختياري)
+  هوش مصنوعي  : HuggingFace Inference API
+  هاست        : Railway.app
+  گيتهاب      : alilaeder1-gif/ghasem-kotlet-v2
+  ربات تلگرام : @whatcore_bot
+  آيدي ربات   : 8921796051
