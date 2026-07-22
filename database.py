@@ -7,9 +7,9 @@ from config import DATABASE_PATH
 logger = logging.getLogger(__name__)
 
 CANDIDATE_PATHS = [
+    '/tmp/bot_data.db',
     DATABASE_PATH,
     '/app/bot_data.db',
-    '/tmp/bot_data.db',
     'bot_data.db',
 ]
 
@@ -21,28 +21,26 @@ class Database:
         self.db: aiosqlite.Connection | None = None
 
     async def connect(self):
-        for attempt in range(5):
+        for attempt in range(10):
             for path in CANDIDATE_PATHS:
-                if os.path.exists(path):
+                try:
+                    db_dir = os.path.dirname(path)
+                    if db_dir:
+                        os.makedirs(db_dir, exist_ok=True)
+                    test_file = os.path.join(db_dir or '.', '.write_test')
+                    with open(test_file, 'w') as f:
+                        f.write('ok')
+                    os.remove(test_file)
                     self.resolved_path = path
                     break
+                except:
+                    continue
             if self.resolved_path:
                 break
-            db_dir = os.path.dirname(self.db_path)
-            try:
-                os.makedirs(db_dir, exist_ok=True)
-                test_file = os.path.join(db_dir, '.write_test')
-                with open(test_file, 'w') as f:
-                    f.write('ok')
-                os.remove(test_file)
-                self.resolved_path = self.db_path
-                break
-            except:
-                pass
-            if attempt < 4:
+            if attempt < 9:
                 await asyncio.sleep(2)
         if not self.resolved_path:
-            self.resolved_path = self.db_path
+            self.resolved_path = '/tmp/bot_data.db'
         self.db = await aiosqlite.connect(self.resolved_path)
         self.db.row_factory = aiosqlite.Row
         await self._create_tables()
