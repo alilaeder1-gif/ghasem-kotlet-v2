@@ -18,30 +18,37 @@ DEFAULT_PROMPT = (
     "پاسخ‌هایت کوتاه و مناسب گروه باشد."
 )
 
-_chatbot = None
+_geminibot = None
 
 
-def get_chatbot():
-    global _chatbot
-    if _chatbot is not None:
-        return _chatbot
-    try:
-        import hugchat
-        from hugchat.login import Login
-        hf_email = os.getenv("HF_EMAIL", "")
-        hf_pass = os.getenv("HF_PASSWORD", "")
-        if hf_email and hf_pass:
-            sign = Login(hf_email, hf_pass)
-            cookies = sign.login()
-            _chatbot = hugchat.ChatBot(cookies=cookies.get_dict())
-        else:
-            import requests
-            cookies = requests.get("https://huggingface.co/chat/").cookies
-            _chatbot = hugchat.ChatBot(cookies=cookies.get_dict())
-        return _chatbot
-    except Exception as e:
-        logger.error(f"Chatbot init error: {e}")
+def get_gemini():
+    global _geminibot
+    if _geminibot is not None:
+        return _geminibot
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
         return None
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        _geminibot = model
+        return model
+    except Exception as e:
+        logger.error(f"Gemini init error: {e}")
+        return None
+
+
+def _call_gemini(user_message: str, system_prompt: str) -> str:
+    model = get_gemini()
+    if not model:
+        return "⚠️ خطا: GEMINI_API_KEY تنظیم نشده."
+    try:
+        full_prompt = f"{system_prompt}\n\nکاربر: {user_message}\nدستیار:"
+        response = model.generate_content(full_prompt)
+        return response.text.strip() or "پاسخی دریافت نشد."
+    except Exception as e:
+        return f"⚠️ خطا: {str(e)[:200]}"
 
 
 async def text_to_speech(text: str) -> str | None:
@@ -94,7 +101,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_chat, user_message, prompt)
+    response = await asyncio.to_thread(_call_gemini, user_message, prompt)
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
