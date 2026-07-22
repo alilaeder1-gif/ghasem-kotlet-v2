@@ -1,10 +1,9 @@
 print("=== AI_CHAT MODULE LOADED ===", flush=True)
-import aiohttp
 import logging
 import os
 import tempfile
 import asyncio
-from aiogram import Router, F
+import json
 from aiogram.types import Message, FSInputFile
 from config import HUGGINGFACE_API_KEY, AI_MODEL
 from database import db
@@ -35,6 +34,25 @@ async def text_to_speech(text: str) -> str | None:
         return None
 
 
+def _call_huggingface(url: str, headers: dict, payload: dict) -> str:
+    import requests
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and data:
+                return data[0].get("generated_text", "پاسخی دریافت نشد.")
+            elif isinstance(data, dict):
+                return data.get("generated_text", "پاسخی دریافت نشد.")
+            return "پاسخی دریافت نشد."
+        elif resp.status_code == 503:
+            return "⏳ مدل در حال بارگذاری است، لطفاً چند لحظه صبر کنید."
+        else:
+            return f"⚠️ خطا: {resp.status_code}"
+    except Exception as e:
+        return f"⚠️ خطا در اتصال: {str(e)[:200]}"
+
+
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
     if not HUGGINGFACE_API_KEY:
         return "⚠️ کلید API تنظیم نشده. لطفاً HUGGINGFACE_API_KEY رو در فایل .env تنظیم کنید."
@@ -53,27 +71,10 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
     payload = {"inputs": format_chat_prompt(messages_list), "parameters": {"max_new_tokens": 512, "temperature": 0.7, "return_full_text": False}}
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                body = await resp.text()
-                if resp.status == 200:
-                    import json
-                    data = json.loads(body)
-                    if isinstance(data, list) and data:
-                        response = data[0].get("generated_text", "پاسخی دریافت نشد.")
-                    elif isinstance(data, dict):
-                        response = data.get("generated_text", "پاسخی دریافت نشد.")
-                    else:
-                        response = "پاسخی دریافت نشد."
-                    await cache.cache_ai_response(user_message, prompt, response)
-                    return response
-                elif resp.status == 503:
-                    return "⏳ مدل در حال بارگذاری است، لطفاً چند لحظه صبر کنید."
-                else:
-                    return f"⚠️ خطا: {resp.status} - {body[:200]}"
-    except Exception as e:
-        return f"⚠️ خطا در اتصال: {str(e)[:150]}"
+    response = await asyncio.to_thread(_call_huggingface, url, headers, payload)
+    if not response.startswith("⚠️"):
+        await cache.cache_ai_response(user_message, prompt, response)
+    return response
 
 
 def format_chat_prompt(messages: list) -> str:
