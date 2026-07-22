@@ -72,3 +72,8 @@ async def cmd_stats(message: Message):
         )
     except Exception as e:
         await message.reply(f"خطا در دریافت آمار: {e}")
+
+
+@router.message(Command("id"))
+async def cmd_id(message: Message):
+    await message.reply(f"🆔 آیدی عددی شما:\n<code>{message.from_user.id}</code>")
