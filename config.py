@@ -25,7 +25,7 @@ WELCOME_MESSAGE = os.getenv(
 
 SPAM_THRESHOLD = int(os.getenv("SPAM_THRESHOLD", "5"))
 SPAM_WINDOW = int(os.getenv("SPAM_WINDOW", "10"))
-FLOOD_THRESHOLD = int(os.getenv("FLOOD_THRESHOLD", "3"))
-FLOOD_WINDOW = int(os.getenv("FLOOD_WINDOW", "5"))
+FLOOD_THRESHOLD = int(os.getenv("FLOOD_THRESHOLD", "10"))
+FLOOD_WINDOW = int(os.getenv("FLOOD_WINDOW", "10"))
 
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]

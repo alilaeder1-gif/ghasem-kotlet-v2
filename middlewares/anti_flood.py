@@ -31,19 +31,10 @@ class AntiFloodMiddleware(BaseMiddleware):
         ]
 
         if len(self.user_messages[user_id]) >= self.threshold:
-            try:
-                await event.delete()
-            except Exception:
-                pass
-
             if len(self.user_messages[user_id]) == self.threshold:
-                await event.answer(
-                    f"⚠️ {event.from_user.full_name} لطفاً آروم‌تر پیام بفرست.",
-                    delete_after=5
-                )
-
+                await event.answer(f"⚠️ {event.from_user.full_name} لطفاً آروم‌تر پیام بفرست.", delete_after=5)
             self.user_messages[user_id].append(now)
-            return None
+            return await handler(event, data)
 
         self.user_messages[user_id].append(now)
         return await handler(event, data)
