@@ -8,24 +8,7 @@ router = Router()
 
 @router.message(Command("setname"))
 async def set_persona_name(message: Message):
-    chat_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
-    if chat_member.status not in ("creator", "administrator"):
-        return await message.reply("فقط ادمین‌ها می‌تونن تنظیم کنن.")
-
-    args = message.text.replace("/setname", "").strip()
-    if not args:
-        return await message.reply(
-            "لطفاً اسم هوش مصنوعی رو بنویسید.\n"
-            "مثال: /setname قاسم کتلت"
-        )
-
-    persona = await db.get_persona(message.chat.id)
-    if persona:
-        await db.set_persona(message.chat.id, args, persona["prompt"])
-    else:
-        await db.set_persona(message.chat.id, args, "تو یک ربات هوشمند هستی. به فارسی پاسخ بده.")
-
-    await message.reply(f"اسم هوش مصنوعی تغییر کرد به: {args}")
+    await message.reply("اسم ربات قابل تغییر نیست. اسمش کتلت است.")
 
 
 @router.message(Command("setprompt"))
@@ -44,8 +27,7 @@ async def set_persona_prompt(message: Message):
         )
 
     persona = await db.get_persona(message.chat.id)
-    name = persona["name"] if persona else "قاسم کتلت"
-    await db.set_persona(message.chat.id, name, args)
+    await db.set_persona(message.chat.id, "کتلت", args)
 
     await message.reply("پرامپت هوش مصنوعی بروزرسانی شد!")
 
@@ -63,7 +45,7 @@ async def toggle_ai(message: Message):
         status = "فعال" if new_status else "غیرفعال"
         await message.reply(f"هوش مصنوعی {status} شد.")
     else:
-        await db.set_persona(message.chat.id, "قاسم کتلت", "تو یک ربات هوشمند هستی.")
+        await db.set_persona(message.chat.id, "کتلت", "تو یک ربات هوشمند هستی.")
         await message.reply("هوش مصنوعی فعال شد.")
 
 
@@ -76,7 +58,7 @@ async def show_persona(message: Message):
     status = "فعال" if persona["enabled"] else "غیرفعال"
     await message.reply(
         f"🤖 تنظیمات هوش مصنوعی:\n\n"
-        f"📛 اسم: {persona['name']}\n"
+        f"📛 اسم: کتلت\n"
         f"📝 پرامپت:\n{persona['prompt']}\n\n"
         f"وضعیت: {status}"
     )
