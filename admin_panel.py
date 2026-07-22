@@ -3,6 +3,8 @@ import sys
 import sqlite3
 import hashlib
 import json
+import random
+import requests
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
@@ -12,6 +14,9 @@ from config import BOT_TOKEN, DATABASE_PATH, REDIS_URL, REDIS_ENABLED
 
 app = Flask(__name__)
 app.secret_key = 'ghasem-kotlet-secret-key-2024'
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+
+verify_codes = {}
 
 redis_client = None
 if REDIS_ENABLED:
@@ -37,6 +42,14 @@ def get_db():
     conn.execute('CREATE TABLE IF NOT EXISTS panel_config (key TEXT PRIMARY KEY, value TEXT)')
     conn.commit()
     return conn
+
+
+def send_telegram(user_id, text):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url, json={"chat_id": user_id, "text": text, "parse_mode": "HTML"}, timeout=10)
+    except:
+        pass
 
 
 def hash_pass(password):
@@ -81,11 +94,39 @@ def login():
         return redirect(url_for('setup'))
 
     if request.method == 'POST':
-        if check_password(request.form.get('password', '')):
-            session['logged_in'] = True
-            return redirect(url_for('dashboard'))
-        flash('رمز عبور اشتباه!', 'error')
-    return render_template('login.html')
+        action = request.form.get('action', '')
+        user_id = request.form.get('user_id', '').strip()
+        code = request.form.get('code', '').strip()
+        password = request.form.get('password', '')
+
+        if action == 'send_code':
+            if not user_id or not user_id.isdigit():
+                flash('لطفاً یک آیدی عددی معتبر وارد کن!', 'error')
+                return render_template('login.html', step='code')
+            uid = int(user_id)
+            if ADMIN_IDS and uid not in ADMIN_IDS:
+                flash('این آیدی مجاز به ورود نیست!', 'error')
+                return render_template('login.html', step='code')
+            vcode = str(random.randint(100000, 999999))
+            verify_codes[uid] = vcode
+            send_telegram(uid, f"🔐 کد ورود به پنل مدیریت:\n\n<code>{vcode}</code>\n\nاین کد تا ۵ دقیقه معتبر است.")
+            flash(f'✅ کد تأیید به آیدی {uid} ارسال شد!', 'success')
+            return render_template('login.html', step='verify', user_id=uid, password=password)
+
+        if action == 'verify':
+            if not user_id or not user_id.isdigit():
+                flash('آیدی نامعتبر!', 'error')
+                return render_template('login.html', step='code')
+            uid = int(user_id)
+            if uid in verify_codes and verify_codes[uid] == code and check_password(password):
+                del verify_codes[uid]
+                session['logged_in'] = True
+                session['user_id'] = uid
+                return redirect(url_for('dashboard'))
+            flash('❌ کد یا رمز عبور اشتباه!', 'error')
+            return render_template('login.html', step='verify', user_id=uid)
+
+    return render_template('login.html', step='code')
 
 
 @app.route('/setup', methods=['GET', 'POST'])

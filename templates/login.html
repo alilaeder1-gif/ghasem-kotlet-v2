@@ -27,7 +27,13 @@
         .login-card h2 {
             color: #fff;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
+        }
+        .login-card .subtitle {
+            color: #a5b4fc;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 0.9rem;
         }
         .login-card .form-control {
             background: rgba(255,255,255,0.1);
@@ -55,17 +61,39 @@
         .login-card .btn-primary:hover {
             background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
         }
+        .login-card .btn-success {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+        }
         .alert {
             border-radius: 10px;
             border: none;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .step-indicator .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+        }
+        .step-indicator .dot.active {
+            background: #6366f1;
         }
     </style>
 </head>
 <body>
     <div class="login-card">
-        <h2><i class="fas fa-robot"></i> قاسم کتلت</h2>
-        <p style="color: #a5b4fc; text-align: center; margin-bottom: 25px;">پنل مدیریت ربات</p>
-        
+        <h2><i class="fas fa-robot"></i> کُتلت</h2>
+        <p class="subtitle">پنل مدیریت ربات</p>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -75,15 +103,41 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
+        {% if step == 'code' or not step %}
         <form method="POST">
+            <input type="hidden" name="action" value="send_code">
             <div class="mb-3">
-                <input type="password" name="password" class="form-control" placeholder="رمز عبور" required autofocus>
+                <label style="color: #a5b4fc; margin-bottom: 5px;">آیدی عددی تلگرام خودت:</label>
+                <input type="text" name="user_id" class="form-control" placeholder="مثال: 123456789" required autofocus>
+            </div>
+            <div class="mb-3">
+                <label style="color: #a5b4fc; margin-bottom: 5px;">رمز عبور:</label>
+                <input type="password" name="password" class="form-control" placeholder="رمز عبور پنل" required>
             </div>
             <button type="submit" class="btn btn-primary w-100">
-                <i class="fas fa-sign-in-alt"></i> ورود
+                <i class="fas fa-paper-plane"></i> ارسال کد تأیید
             </button>
         </form>
+        {% endif %}
+
+        {% if step == 'verify' %}
+        <form method="POST">
+            <input type="hidden" name="action" value="verify">
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            <div class="mb-3">
+                <label style="color: #a5b4fc; margin-bottom: 5px;">کد ارسال شده به تلگرامت:</label>
+                <input type="text" name="code" class="form-control" placeholder="کد ۶ رقمی" required autofocus>
+            </div>
+            <div class="mb-3">
+                <label style="color: #a5b4fc; margin-bottom: 5px;">رمز عبور:</label>
+                <input type="password" name="password" class="form-control" placeholder="رمز عبور پنل" required>
+            </div>
+            <button type="submit" class="btn btn-success w-100">
+                <i class="fas fa-check"></i> تأیید و ورود
+            </button>
+        </form>
+        {% endif %}
     </div>
 </body>
 </html>
