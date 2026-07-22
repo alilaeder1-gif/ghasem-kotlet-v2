@@ -4,7 +4,6 @@ import os
 import tempfile
 import asyncio
 import json
-from aiogram.types import Message, FSInputFile
 from config import HUGGINGFACE_API_KEY, AI_MODEL
 from database import db
 from cache import cache
@@ -88,54 +87,3 @@ def format_chat_prompt(messages: list) -> str:
             formatted += f"<|assistant|>\n{content}\n"
     formatted += "<|assistant|>\n"
     return formatted
-
-
-@router.message()
-async def ai_chat_handler(message: Message):
-    print(f"=== AI_CHAT HANDLER FIRED: chat_type={message.chat.type} ===", flush=True)
-    user_msg = (message.text or message.caption or "").strip()
-    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, has_text={bool(user_msg)}")
-
-    if not user_msg or user_msg.startswith("/"):
-        return
-
-    if message.chat.type in ("group", "supergroup"):
-        bot_info = await message.bot.get_me()
-        bot_username = bot_info.username
-        is_mention = bot_username and f"@{bot_username}" in user_msg
-        is_reply = (
-            message.reply_to_message
-            and message.reply_to_message.from_user
-            and message.reply_to_message.from_user.id == bot_info.id
-        )
-        if not is_mention and not is_reply:
-            return
-        if is_mention:
-            user_msg = user_msg.replace(f"@{bot_username}", "").strip()
-
-    if not user_msg:
-        user_msg = "سلام"
-
-    persona = await db.get_persona(message.chat.id)
-    if persona and not persona["enabled"]:
-        return
-
-    system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
-
-    await message.chat.send_action("typing")
-    response = await ask_ai(user_msg, system_prompt)
-    logger.info(f"AI response: {response[:100]}")
-    await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
-
-    audio_path = await text_to_speech(response)
-    if audio_path:
-        try:
-            await message.reply_voice(FSInputFile(audio_path))
-            return
-        except Exception as e:
-            logger.error(f"Voice reply failed: {e}")
-
-    try:
-        await message.reply(response)
-    except Exception as e:
-        logger.error(f"Text reply failed: {e}")
