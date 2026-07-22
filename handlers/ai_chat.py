@@ -1,7 +1,10 @@
 import aiohttp
 import logging
+import os
+import tempfile
+import asyncio
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from config import HUGGINGFACE_API_KEY, AI_MODEL
 from database import db
 from cache import cache
@@ -17,6 +20,18 @@ DEFAULT_PROMPT = (
     "به سوالات فنی، عمومی و چت دوستانه جواب بده. "
     "پاسخ‌هایت کوتاه و مناسب گروه باشد."
 )
+
+
+async def text_to_speech(text: str) -> str | None:
+    try:
+        import edge_tts
+        communicate = edge_tts.Communicate(text, "fa-IR-FaridNeural")
+        path = os.path.join(tempfile.gettempdir(), f"voice_{abs(hash(text))}.mp3")
+        await communicate.save(path)
+        return path
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        return None
 
 
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
@@ -78,31 +93,22 @@ def format_chat_prompt(messages: list) -> str:
 @router.message()
 async def ai_chat_handler(message: Message):
     user_msg = (message.text or message.caption or "").strip()
-    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, has_text={bool(user_msg)}, starts_with_slash={user_msg.startswith('/') if user_msg else False}")
+    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, has_text={bool(user_msg)}")
 
-    if not user_msg:
-        logger.info("No text, returning")
-        return
-
-    if user_msg.startswith("/"):
-        logger.info("Message starts with /, returning")
+    if not user_msg or user_msg.startswith("/"):
         return
 
     if message.chat.type in ("group", "supergroup"):
         bot_info = await message.bot.get_me()
         bot_username = bot_info.username
-
         is_mention = bot_username and f"@{bot_username}" in user_msg
         is_reply = (
             message.reply_to_message
             and message.reply_to_message.from_user
             and message.reply_to_message.from_user.id == bot_info.id
         )
-
         if not is_mention and not is_reply:
-            logger.info("Not a mention or reply in group, skipping")
             return
-
         if is_mention:
             user_msg = user_msg.replace(f"@{bot_username}", "").strip()
 
@@ -111,7 +117,6 @@ async def ai_chat_handler(message: Message):
 
     persona = await db.get_persona(message.chat.id)
     if persona and not persona["enabled"]:
-        logger.info("AI disabled for this chat")
         return
 
     system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
@@ -121,7 +126,15 @@ async def ai_chat_handler(message: Message):
     logger.info(f"AI response: {response[:100]}")
     await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
 
+    audio_path = await text_to_speech(response)
+    if audio_path:
+        try:
+            await message.reply_voice(FSInputFile(audio_path))
+            return
+        except Exception as e:
+            logger.error(f"Voice reply failed: {e}")
+
     try:
         await message.reply(response)
     except Exception as e:
-        logger.error(f"Failed to reply: {e}")
+        logger.error(f"Text reply failed: {e}")
