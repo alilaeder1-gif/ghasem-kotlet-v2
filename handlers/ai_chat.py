@@ -57,27 +57,24 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def ai_chat_handler(message: Message):
-    if not message.chat.type in ("group", "supergroup"):
-        return
+    user_msg = message.text.strip()
 
-    bot_info = await message.bot.get_me()
-    bot_username = bot_info.username
+    if message.chat.type in ("group", "supergroup"):
+        bot_info = await message.bot.get_me()
+        bot_username = bot_info.username
 
-    text = message.text or ""
-    is_mention = bot_username and f"@{bot_username}" in text
-    is_reply = (
-        message.reply_to_message
-        and message.reply_to_message.from_user
-        and message.reply_to_message.from_user.id == bot_info.id
-    )
+        is_mention = bot_username and f"@{bot_username}" in user_msg
+        is_reply = (
+            message.reply_to_message
+            and message.reply_to_message.from_user
+            and message.reply_to_message.from_user.id == bot_info.id
+        )
 
-    if not is_mention and not is_reply:
-        return
+        if not is_mention and not is_reply:
+            return
 
-    if is_mention:
-        user_msg = text.replace(f"@{bot_username}", "").strip()
-    else:
-        user_msg = text.strip()
+        if is_mention:
+            user_msg = user_msg.replace(f"@{bot_username}", "").strip()
 
     if not user_msg:
         user_msg = "سلام"
