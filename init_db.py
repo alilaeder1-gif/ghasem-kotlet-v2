@@ -150,5 +150,5 @@ if __name__ == '__main__':
         except Exception as e:
             print(f'Attempt {i+1}/5 failed: {e}')
             time.sleep(3)
-    print('Failed to initialize database!')
-    sys.exit(1)
+    print('Failed to initialize database! Bot will create tables on startup.')
+    sys.exit(0)
