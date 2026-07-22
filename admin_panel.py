@@ -33,10 +33,23 @@ if REDIS_ENABLED:
 
 def get_db():
     db_path = DATABASE_PATH
-    for path in [db_path, '/app/bot_data.db', '/tmp/bot_data.db', 'bot_data.db']:
-        if os.path.exists(path):
+    candidates = [db_path, '/app/bot_data.db', '/tmp/bot_data.db', '/app/data/bot_data.db', 'bot_data.db']
+    found = False
+    for path in candidates:
+        try:
+            d = os.path.dirname(path)
+            if d and not os.path.exists(d):
+                os.makedirs(d, exist_ok=True)
+            conn = sqlite3.connect(path)
+            conn.execute('SELECT 1 FROM sqlite_master')
             db_path = path
+            found = True
             break
+        except:
+            continue
+    if not found:
+        db_path = '/tmp/bot_data.db'
+        conn = sqlite3.connect(db_path)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute('CREATE TABLE IF NOT EXISTS panel_config (key TEXT PRIMARY KEY, value TEXT)')
