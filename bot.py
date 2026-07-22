@@ -62,7 +62,8 @@ async def main():
                 and message.reply_to_message.from_user
                 and message.reply_to_message.from_user.id == bot_info.id
             )
-            if not is_mention and not is_reply:
+            is_name_called = any(k in user_msg.lower() for k in ["کتلت", "kotlet"])
+            if not is_mention and not is_reply and not is_name_called:
                 return
             if is_mention:
                 user_msg = user_msg.replace(f"@{bot_info.username}", "").strip()
