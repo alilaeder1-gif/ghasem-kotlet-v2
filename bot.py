@@ -3,6 +3,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.types import Message
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
 from cache import cache
@@ -32,6 +33,12 @@ async def main():
         logger.info("Redis متصل شد.")
     else:
         logger.info("Redis فعال نیست (کش غیرفعال)")
+
+    @dp.message()
+    async def test_handler(message: Message):
+        print(f"=== TEST HANDLER FIRED: text={message.text} ===", flush=True)
+        if message.text and not message.text.startswith("/"):
+            await message.reply(f"echo: {message.text}")
 
     dp.message.middleware(AntiFloodMiddleware())
 
