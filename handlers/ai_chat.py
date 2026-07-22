@@ -75,10 +75,18 @@ def format_chat_prompt(messages: list) -> str:
     return formatted
 
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message()
 async def ai_chat_handler(message: Message):
-    user_msg = message.text.strip()
-    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, text={user_msg[:50]}")
+    user_msg = (message.text or message.caption or "").strip()
+    logger.info(f"ai_chat_handler called: chat_type={message.chat.type}, has_text={bool(user_msg)}, starts_with_slash={user_msg.startswith('/') if user_msg else False}")
+
+    if not user_msg:
+        logger.info("No text, returning")
+        return
+
+    if user_msg.startswith("/"):
+        logger.info("Message starts with /, returning")
+        return
 
     if message.chat.type in ("group", "supergroup"):
         bot_info = await message.bot.get_me()
