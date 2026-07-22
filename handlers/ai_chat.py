@@ -11,8 +11,6 @@ from cache import cache
 
 logger = logging.getLogger(__name__)
 
-router = Router()
-
 DEFAULT_PROMPT = (
     "تو یک دستیار هوشمند در گروه تلگرام هستی. "
     "به فارسی پاسخ بده، مختصر و مفید باش. "
