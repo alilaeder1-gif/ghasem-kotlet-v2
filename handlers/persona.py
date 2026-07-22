@@ -8,7 +8,7 @@ router = Router()
 
 @router.message(Command("setname"))
 async def set_persona_name(message: Message):
-    await message.reply("اسم ربات قابل تغییر نیست. اسمش کتلت است.")
+    await message.reply("اسم ربات قابل تغییر نیست. اسمش کُتلت است.")
 
 
 @router.message(Command("setprompt"))
@@ -27,7 +27,7 @@ async def set_persona_prompt(message: Message):
         )
 
     persona = await db.get_persona(message.chat.id)
-    await db.set_persona(message.chat.id, "کتلت", args)
+    await db.set_persona(message.chat.id, "کُتلت", args)
 
     await message.reply("پرامپت هوش مصنوعی بروزرسانی شد!")
 
@@ -45,7 +45,7 @@ async def toggle_ai(message: Message):
         status = "فعال" if new_status else "غیرفعال"
         await message.reply(f"هوش مصنوعی {status} شد.")
     else:
-        await db.set_persona(message.chat.id, "کتلت", "تو یک ربات هوشمند هستی.")
+        await db.set_persona(message.chat.id, "کُتلت", "تو یک ربات هوشمند هستی.")
         await message.reply("هوش مصنوعی فعال شد.")
 
 
@@ -58,7 +58,7 @@ async def show_persona(message: Message):
     status = "فعال" if persona["enabled"] else "غیرفعال"
     await message.reply(
         f"🤖 تنظیمات هوش مصنوعی:\n\n"
-        f"📛 اسم: کتلت\n"
+        f"📛 اسم: کُتلت\n"
         f"📝 پرامپت:\n{persona['prompt']}\n\n"
         f"وضعیت: {status}"
     )

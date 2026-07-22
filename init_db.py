@@ -78,7 +78,7 @@ def init_database():
         );
         CREATE TABLE IF NOT EXISTS ai_persona (
             chat_id INTEGER PRIMARY KEY,
-            persona_name TEXT DEFAULT 'قاسم کتلت',
+            persona_name TEXT DEFAULT 'کُتلت',
             system_prompt TEXT DEFAULT 'تو یک ربات هوشمند هستی. به فارسی پاسخ بده.',
             is_enabled INTEGER DEFAULT 1
         );

@@ -10,7 +10,7 @@ router = Router()
 async def cmd_start(message: Message):
     if message.chat.type in ("group", "supergroup"):
         return await message.reply(
-            "🤖 قاسم کتلت - ربات مدیریت گروه\n\n"
+            "🤖 کُتلت - ربات مدیریت گروه\n\n"
             "📋 دستورات مدیریتی:\n"
             "/rules - نمایش قوانین\n"
             "/setrules - تنظیم قوانین\n"
@@ -37,11 +37,11 @@ async def cmd_start(message: Message):
             "/delreply - حذف پاسخ خودکار\n"
             "/listreplies - لیست پاسخ‌ها\n\n"
             "🤖 چت هوشمند:\n"
-            "@قاسم_کتلت + پیام - چت با هوش مصنوعی"
+            "@کُتلت + پیام - چت با هوش مصنوعی"
         )
 
     await message.reply(
-        "سلام! 👋\nمن قاسم کتلت هستم، ربات مدیریت گروه.\n\n"
+            "سلام! 👋\nمن کُتلت هستم، ربات مدیریت گروه.\n\n"
         "📋 دستورات ادمین:\n"
         "/ban - بن کاربر (ریپلای)\n"
         "/kick - کیک کاربر (ریپلای)\n"
@@ -52,7 +52,7 @@ async def cmd_start(message: Message):
         "/setreply - تنظیم پاسخ خودکار\n"
         "/setprompt - تنظیم شخصیت AI\n\n"
         "🤖 چت هوشمند:\n"
-        "@قاسم_کتلت + پیام - با هوش مصنوعی حرف بزنید"
+        "@کُتلت + پیام - با هوش مصنوعی حرف بزنید"
     )
 
 

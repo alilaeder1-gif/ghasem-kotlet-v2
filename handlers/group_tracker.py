@@ -20,7 +20,7 @@ async def on_bot_added(event: ChatMemberUpdated):
 
     try:
         await event.answer(
-            f"سلام! 👋\nمن قاسم کتلت هستم.\n\n"
+            f"سلام! 👋\nمن کُتلت هستم.\n\n"
             f"از اضافه کردنم به گروه «{chat.title}» ممنونم!\n\n"
             f"برای شروع /start رو بزنید.\n"
             f"برای راهنما /help رو بزنید."

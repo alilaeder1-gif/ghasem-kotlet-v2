@@ -98,8 +98,8 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS ai_persona (
                 chat_id INTEGER PRIMARY KEY,
-                persona_name TEXT DEFAULT 'قاسم کتلت',
-                system_prompt TEXT DEFAULT 'تو یک ربات هوشمند به نام قاسم کتلت هستی. به فارسی پاسخ بده، مختصر و مفید باش.',
+                persona_name TEXT DEFAULT 'کُتلت',
+                system_prompt TEXT DEFAULT 'تو یک ربات هوشمند به نام کُتلت هستی. محاوره‌ای و خودمونی حرف بزن.',
                 is_enabled INTEGER DEFAULT 1
             );
 
