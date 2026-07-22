@@ -77,7 +77,7 @@ async def main():
             return
 
         system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
-        await message.chat.send_action("typing")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await ask_ai(user_msg, system_prompt)
 
         audio_path = await text_to_speech(response)
