@@ -4,8 +4,6 @@ import os
 import tempfile
 import asyncio
 import json
-from config import HUGGINGFACE_API_KEY, AI_MODEL
-from database import db
 from cache import cache
 
 logger = logging.getLogger(__name__)
@@ -18,35 +16,40 @@ DEFAULT_PROMPT = (
     "پاسخ‌هایت کوتاه و مناسب گروه باشد."
 )
 
-_geminibot = None
+_deepseek_client = None
 
 
-def get_gemini():
-    global _geminibot
-    if _geminibot is not None:
-        return _geminibot
-    api_key = os.getenv("GEMINI_API_KEY", "")
+def get_deepseek():
+    global _deepseek_client
+    if _deepseek_client is not None:
+        return _deepseek_client
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        _geminibot = model
-        return model
+        from openai import OpenAI
+        _deepseek_client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        return _deepseek_client
     except Exception as e:
-        logger.error(f"Gemini init error: {e}")
+        logger.error(f"DeepSeek init error: {e}")
         return None
 
 
-def _call_gemini(user_message: str, system_prompt: str) -> str:
-    model = get_gemini()
-    if not model:
-        return "⚠️ خطا: GEMINI_API_KEY تنظیم نشده."
+def _call_deepseek(user_message: str, system_prompt: str) -> str:
+    client = get_deepseek()
+    if not client:
+        return "⚠️ خطا: DEEPSEEK_API_KEY تنظیم نشده."
     try:
-        full_prompt = f"{system_prompt}\n\nکاربر: {user_message}\nدستیار:"
-        response = model.generate_content(full_prompt)
-        return response.text.strip() or "پاسخی دریافت نشد."
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=512,
+            temperature=0.7
+        )
+        return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
     except Exception as e:
         return f"⚠️ خطا: {str(e)[:200]}"
 
@@ -63,70 +66,13 @@ async def text_to_speech(text: str) -> str | None:
         return None
 
 
-def _call_chat(user_message: str, system_prompt: str) -> str:
-    chatbot = get_chatbot()
-    if not chatbot:
-        return "⚠️ خطا: اتصال به HuggingFace Chat برقرار نشد."
-
-    try:
-        conversation_id = chatbot.new_conversation(
-            model=AI_MODEL,
-            system_prompt=system_prompt,
-            turn=1
-        )
-        chatbot.change_conversation(conversation_id)
-        response = ""
-        for resp in chatbot.chat(user_message):
-            if resp:
-                if isinstance(resp, dict) and "token" in resp:
-                    response += resp["token"]
-                elif isinstance(resp, str):
-                    response += resp
-        try:
-            chatbot.delete_conversation(conversation_id)
-        except:
-            pass
-        return response.strip() or "پاسخی دریافت نشد."
-    except Exception as e:
-        try:
-            chatbot.delete_conversation(conversation_id)
-        except:
-            pass
-        return f"⚠️ خطا در اتصال: {str(e)[:200]}"
-
-
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
     prompt = system_prompt or DEFAULT_PROMPT
     cached = await cache.get_ai_response(user_message, prompt)
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_gemini, user_message, prompt)
+    response = await asyncio.to_thread(_call_deepseek, user_message, prompt)
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
-
-
-def format_llama3_prompt(messages: list) -> str:
-    formatted = "<|begin_of_text|>"
-    for msg in messages:
-        role = msg["role"]
-        content = msg["content"]
-        formatted += f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>"
-    formatted += "<|start_header_id|>assistant<|end_header_id|>\n\n"
-    return formatted
-
-
-def format_chat_prompt(messages: list) -> str:
-    formatted = ""
-    for msg in messages:
-        role = msg["role"]
-        content = msg["content"]
-        if role == "system":
-            formatted += f"<|system|>\n{content}\n"
-        elif role == "user":
-            formatted += f"<|user|>\n{content}\n"
-        elif role == "assistant":
-            formatted += f"<|assistant|>\n{content}\n"
-    formatted += "<|assistant|>\n"
-    return formatted

@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
-AI_MODEL = os.getenv("AI_MODEL", "meta-llama/Llama-3-8B-Instruct")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_data.db")
 
 REDIS_URL = os.getenv("REDIS_URL", "") or os.getenv("REDIS_TLS_URL", "") or ""
