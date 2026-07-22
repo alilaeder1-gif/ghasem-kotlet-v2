@@ -31,9 +31,29 @@ async def text_to_speech(text: str) -> str | None:
         return None
 
 
+async def resolve_hostname(hostname: str) -> str | None:
+    try:
+        import dns.resolver
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+        resolver.timeout = 3
+        resolver.lifetime = 5
+        answers = await asyncio.to_thread(resolver.resolve, hostname, 'A')
+        return str(answers[0])
+    except:
+        return None
+
+
 async def _call_huggingface_async(url: str, headers: dict, payload: dict) -> str:
     import httpx
     try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        ip = await resolve_hostname(parsed.hostname)
+        if ip:
+            url = url.replace(parsed.hostname, ip)
+            headers["Host"] = parsed.hostname
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
@@ -78,19 +98,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         }
     }
 
-    urls = [
-        f"https://router.huggingface.co/hf-inference/models/{AI_MODEL}",
-        f"https://api-inference.huggingface.co/models/{AI_MODEL}",
-    ]
-
-    last_error = None
-    for url in urls:
-        response = await _call_huggingface_async(url, headers, payload)
-        if not response.startswith("⚠"):
-            break
-        last_error = response
-    else:
-        response = last_error
+    response = await _call_huggingface_async(url, headers, payload)
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
