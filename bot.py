@@ -36,6 +36,13 @@ async def main():
     else:
         logger.info("Redis فعال نیست (کش غیرفعال)")
 
+    bio = "سلام جوون! من کُتلت هستم، یه رفیق پرحرف و باحال. هر وقت حوصله‌ات گرفت یا میخوای یه گپی بزنی، من اینجام 😎"
+    try:
+        await bot.set_my_description(bio)
+        await bot.set_my_short_description("کُتلت | رفیق باحال گروه")
+    except:
+        pass
+
     dp.message.middleware(AntiFloodMiddleware())
 
     dp.include_router(admin.router)
