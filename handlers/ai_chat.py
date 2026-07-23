@@ -119,7 +119,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+    response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
 
     if response.startswith("SEARCH:"):
         query = response[len("SEARCH:"):].strip()
@@ -127,9 +127,9 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         search_results = await web_search(query)
         if search_results:
             search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
-            response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt, chat_history)
+            response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
         else:
-            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+            response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
 
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
