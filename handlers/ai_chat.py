@@ -23,9 +23,10 @@ DEFAULT_PROMPT = (
     "اگه چیزی رو قطعاً نمیدونی، بگو 'والا در موردش اطلاعات ندارم.' "
     "می‌تونی برای جواب دادن از جستجوی اینترنتی استفاده کنی - اطلاعات به‌روز و دقیق بده. "
     "هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
-    "با لحن خودمونی و دوستانه جواب بده. اگه کاربر محترمانه حرف زد، محترمانه جواب بده. "
+    "با لحن کاملاً محاوره‌ای و خودمونی جواب بده - درست مثل یه رفیق تهرونی حرف بزن. "
+    "اگه کاربر محترمانه حرف زد، محترمانه جواب بده. "
     "نصف شوخ‌طبعی، نصف جدی. "
-    "جوابات باید کامل باشه، نه تک کلمه‌ای. توضیح بده.")
+    "جوابات باید کامل باشه، نه تک کلمه‌ای. توضیح بده."
 )
 
 SEARCH_INSTRUCTION = (
@@ -86,6 +87,8 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
 
 async def web_search(query: str, max_results: int = 5) -> str:
     try:
+        import warnings
+        warnings.filterwarnings("ignore", message=".*duckduckgo_search.*")
         from duckduckgo_search import DDGS
         results = []
         def _search():
