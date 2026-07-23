@@ -11,7 +11,7 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-@router.message(Command("admin"), F.chat.type == "private")
+@router.message(Command("ghasemkotlet"), F.chat.type == "private")
 async def admin_menu(message: Message):
     if not is_admin(message.from_user.id):
         return
