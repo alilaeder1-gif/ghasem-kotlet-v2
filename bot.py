@@ -188,7 +188,6 @@ async def main():
                         await message.reply(response)
                 else:
                     await message.reply(response)
-                await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
         except Exception as e:
             await message.reply(f"⚠️ خطا: {str(e)[:100]}")
 
