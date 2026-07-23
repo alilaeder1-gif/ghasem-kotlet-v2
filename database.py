@@ -251,9 +251,9 @@ class Database:
             rows = await cursor.fetchall()
             result = []
             for r in reversed(rows):
-                result.append({"message": r["message"]})
-                result.append({"message": r["response"]})
-            return result[-limit:]
+                result.append({"role": "user", "content": r["message"]})
+                result.append({"role": "assistant", "content": r["response"]})
+            return result[:limit]
 
     async def set_persona(self, chat_id: int, name: str, system_prompt: str):
         await self.db.execute(
