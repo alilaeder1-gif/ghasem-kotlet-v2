@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -12,6 +13,11 @@ from handlers import admin, welcome, rules, spam, misc, custom, persona, group_t
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
 from handlers.fun import reminder_worker
+
+
+def normalize_persian(text):
+    text = re.sub(r'(.)\1{2,}', r'\1\1', text)
+    return text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,13 +79,15 @@ async def main():
                 and message.reply_to_message.from_user
                 and message.reply_to_message.from_user.id == bot_info.id
             )
-            is_name_called = any(k in user_msg.lower() for k in ["کتلت", "کتی", "kotlet", "قاسم", "سلام"])
-            if is_name_called and "سلام" in user_msg.lower() and message.reply_to_message:
+            user_msg_lower = user_msg.lower()
+            norm_msg = normalize_persian(user_msg_lower)
+            is_name_called = any(k in norm_msg for k in ["کتلت", "کتی", "kotlet", "قاسم", "سلام", "چطوری", "چطورین", "چطوریین"])
+            if is_name_called and message.reply_to_message:
                 is_reply_to_bot = (
                     message.reply_to_message.from_user
                     and message.reply_to_message.from_user.id == bot_info.id
                 )
-                if not is_reply_to_bot:
+                if not is_reply_to_bot and any(k in norm_msg for k in ["سلام", "چطوری", "چطورین", "چطوریین"]):
                     is_name_called = False
             if not is_mention and not is_reply and not is_name_called:
                 return
