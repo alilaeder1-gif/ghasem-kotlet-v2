@@ -4,6 +4,7 @@ import os
 import tempfile
 import asyncio
 import json
+import re
 from cache import cache
 
 logger = logging.getLogger(__name__)
@@ -17,11 +18,8 @@ DEFAULT_PROMPT = (
     "اگه کسی پرسید سازندت کیه یا کی درستت کرده، بگو 'عمو ترامپ زد کتلتش کرده، دست پخت عمو ترامپم'. "
     "مهم: فقط میتونی حرف بزنی و جواب بدی. هیچوقت نگو اهنگ فرستادم، عکس فرستادم، فایل فرستادم یا هر چیز دیگه‌ای. "
     "نمیتونی اهنگ، عکس، فیلم، فایل، ویس یا هر نوع رسانه‌ای بفرستی. اگه کسی درخواست اهنگ یا فیلم کرد بگو 'کتلت فقط حرف میزنه داداش، اهنگ بلد نیست بفرسته!' "
-    "نمیتونی توی اینترنت سرچ کنی یا به سایت‌های خارجی دسترسی داشته باشی. "
     "ویسی که برات میفرستن رو متنی میکنی و جواب میدی (فقط متن، نه ویس). "
-    "دستورات گروه مثل /tag، /game، /guess، /remind و ... رو می‌تونی اجرا کنی. "
     "اگه ازت چیزی پرسیدن که نمیدونی، صاف بگو 'نمدونم والا'، الکی جواب نده. "
-    "دقیقاً با همون لحن و کلماتی که کاربر استفاده کرد جواب بده. "
     "خلاق باش، هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
     "لغات و اصطلاحات فارسی رو از گفتگوها یاد بگیر و استفاده کن. "
     "شوخ طبعی ۷۰٪، یه کم جدی ۳۰٪. "
@@ -29,6 +27,19 @@ DEFAULT_PROMPT = (
     "زبون تند و تیز داشته باش، کلمات محاوره‌ای و کوچه بازاری استفاده کن. "
     "جوابات باید ایرانی و دوستانه باشه. "
     "به فارسی محاوره‌ای و دوستانه پاسخ بده."
+)
+
+SEARCH_INSTRUCTION = (
+    "\n\n[سیستم: تو می‌تونی از جستجوی اینترنت استفاده کنی. "
+    "اگه برای جواب دادن به سوال کاربر نیاز به اطلاعات به‌روز یا حقیقت‌های مشخص داری، "
+    "اولین خط پاسخ خودت رو با SEARCH: <عبارت جستجو> شروع کن. "
+    "بعد از جستجو، من نتیجه رو بهت میدم و تو جواب نهایی رو میدی. "
+    "اگه نیازی به جستجو نداری، فقط به طور عادی جواب بده.]"
+)
+
+SEARCH_PROMPT_TEMPLATE = (
+    "نتایج جستجوی اینترنتی برای «{query}»:\n{results}\n\n"
+    "حالا با استفاده از این اطلاعات به سوال کاربر جواب بده."
 )
 
 _deepseek_client = None
@@ -76,16 +87,27 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
         return f"⚠️ خطا: {str(e)[:200]}"
 
 
-async def text_to_speech(text: str) -> str | None:
+async def web_search(query: str, max_results: int = 5) -> str:
     try:
-        import edge_tts
-        communicate = edge_tts.Communicate(text, "fa-IR-FaridNeural")
-        path = os.path.join(tempfile.gettempdir(), f"voice_{abs(hash(text))}.mp3")
-        await communicate.save(path)
-        return path
+        from duckduckgo_search import DDGS
+        results = []
+        def _search():
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=max_results):
+                    results.append(r)
+        await asyncio.to_thread(_search)
+        if not results:
+            return "نتیجه‌ای پیدا نشد."
+        lines = []
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "").strip()
+            body = r.get("body", "").strip()
+            if title or body:
+                lines.append(f"{i}. {title}\n   {body[:200]}")
+        return "\n\n".join(lines) if lines else "نتیجه‌ای پیدا نشد."
     except Exception as e:
-        logger.error(f"TTS error: {e}")
-        return None
+        logger.error(f"web_search error: {e}")
+        return ""
 
 
 async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
@@ -94,7 +116,22 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+    response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+    if response.startswith("SEARCH:"):
+        query = response[len("SEARCH:"):].strip()
+        logger.info(f"AI requested search: {query}")
+        search_results = await web_search(query)
+        if search_results:
+            search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
+            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+        else:
+            response = "نمدونم والا، نتونستم چیزی پیدا کنم."
+    elif response.startswith("SEARCH"):
+        search_result = await web_search(user_message)
+        if search_result:
+            search_context = SEARCH_PROMPT_TEMPLATE.format(query=user_message, results=search_result)
+            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
