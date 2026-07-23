@@ -1,17 +1,19 @@
 import asyncio
 import logging
+import os
 import re
+import tempfile
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
+from handlers.ai_chat import ask_ai, text_to_speech, DEFAULT_PROMPT
 from handlers.fun import reminder_worker
 
 
@@ -134,6 +136,60 @@ async def main():
             await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
         except:
             pass
+
+    @dp.message(F.voice)
+    async def voice_handler(message: Message):
+        try:
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            file = await message.bot.get_file(message.voice.file_id)
+            ext = file.file_path.split(".")[-1] if file.file_path else "ogg"
+            tmp = os.path.join(tempfile.gettempdir(), f"voice_{message.voice.file_id}.{ext}")
+            await message.bot.download_file(file.file_path, tmp)
+
+            import httpx
+            api_key = os.getenv("GROQ_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+            if not api_key:
+                return await message.reply("⚠️ خطا: API key تنظیم نشده.")
+            with open(tmp, "rb") as f:
+                resp = httpx.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    files={"file": (f"voice.{ext}", f, f"audio/{ext}")},
+                    data={"model": "whisper-large-v3-turbo", "language": "fa"},
+                    timeout=30
+                )
+            os.remove(tmp)
+            if resp.status_code != 200:
+                return await message.reply("⚠️ نتونستم ویست رو بفهمم.")
+            user_msg = resp.json().get("text", "").strip()
+            if not user_msg:
+                return await message.reply("⚠️ چیزی نگفتی توی ویس.")
+
+            user_msg_lower = user_msg.lower()
+            is_name = any(k in user_msg_lower for k in ["کتلت", "کتی", "kotlet", "قاسم"])
+            is_greet = is_persian_greeting(user_msg_lower)
+            if message.chat.type in ("group", "supergroup") and not is_name and not is_greet:
+                return
+
+            persona = await db.get_persona(message.chat.id)
+            if persona and not persona["enabled"]:
+                return
+            system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
+            response = await ask_ai(user_msg, system_prompt)
+            if response.startswith("⚠") or response.startswith("⏳"):
+                await message.reply(response)
+            else:
+                audio_path = await text_to_speech(response)
+                if audio_path:
+                    try:
+                        await message.reply_voice(FSInputFile(audio_path))
+                    except:
+                        await message.reply(response)
+                else:
+                    await message.reply(response)
+                await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
+        except Exception as e:
+            await message.reply(f"⚠️ خطا: {str(e)[:100]}")
 
     dp.include_router(misc.router)
 
