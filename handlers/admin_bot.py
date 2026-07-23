@@ -16,11 +16,11 @@ async def admin_menu(message: Message):
         "🔐 پنل مدیریت بات\n\n"
         "👥 /groups - لیست گروه‌ها\n"
         "👤 /users - لیست کاربران\n"
-        "💬 /g <chat_id> - جزئیات گروه\n"
-        "✉️ /gmsg <chat_id> <متن> - ارسال پیام به گروه\n"
-        "📋 /ghistory <chat_id> - آخرین مکالمات گروه\n"
-        "🔄 /gtoggle <chat_id> - فعال/غیرفعال AI گروه\n"
-        "🚪 /gleave <chat_id> - خروج از گروه"
+        "💬 /g [chat_id] - جزئیات گروه\n"
+        "✉️ /gmsg [chat_id] [متن] - ارسال پیام به گروه\n"
+        "📋 /ghistory [chat_id] - آخرین مکالمات گروه\n"
+        "🔄 /gtoggle [chat_id] - فعال/غیرفعال AI گروه\n"
+        "🚪 /gleave [chat_id] - خروج از گروه"
     )
 
 
