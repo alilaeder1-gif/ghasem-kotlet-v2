@@ -3,34 +3,91 @@
 {% block title %}پاسخ خودکار - پنل مدیریت{% endblock %}
 
 {% block content %}
-<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-reply"></i> پاسخ‌های خودکار ({{ replies|length }})</h2>
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-reply"></i> پاسخ‌های خودکار</h2>
 
-<div class="card-custom">
-    <div class="card-body">
-        <table class="table table-custom">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>کلمه کلیدی</th>
-                    <th>پاسخ</th>
-                    <th>گروه</th>
-                    <th>Regex</th>
-                    <th>ساخته شده</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in replies %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td><span class="badge bg-info">{{ r.keyword }}</span></td>
-                    <td>{{ r.response[:60] }}{% if r.response|length > 60 %}...{% endif %}</td>
-                    <td style="font-size: 0.8rem;">{{ r.group_title[:25] }}...</td>
-                    <td>{% if r.is_regex %}<span class="badge bg-warning">بله</span>{% else %}<span class="badge bg-secondary">خیر</span>{% endif %}</td>
-                    <td>{{ r.created_at }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-plus"></i> افزودن پاسخ خودکار
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_auto_reply') }}">
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">گروه:</label>
+                        <select name="chat_id" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                            <option value="">انتخاب گروه...</option>
+                            {% for g in groups %}
+                            <option value="{{ g.chat_id }}">{{ g.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">کلمه کلیدی:</label>
+                        <input type="text" name="keyword" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">پاسخ:</label>
+                        <textarea name="response" rows="3" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_regex" class="form-check-input">
+                            <label class="form-check-label" style="color: #a5b4fc;">Regex (عبارت منظم)</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save"></i> ذخیره
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-list"></i> پاسخ‌های خودکار ({{ replies|length }})
+            </div>
+            <div class="card-body">
+                {% if replies %}
+                <table class="table table-custom">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>کلمه کلیدی</th>
+                            <th>پاسخ</th>
+                            <th>گروه</th>
+                            <th>Regex</th>
+                            <th>ساخته شده</th>
+                            <th>عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in replies %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><span class="badge bg-info">{{ r.keyword }}</span></td>
+                            <td>{{ r.response[:60] }}{% if r.response|length > 60 %}...{% endif %}</td>
+                            <td style="font-size: 0.8rem;">{{ r.title[:20] }}{% if r.title|length > 20 %}...{% endif %}</td>
+                            <td>{% if r.is_regex %}<span class="badge bg-warning">بله</span>{% else %}<span class="badge bg-secondary">خیر</span>{% endif %}</td>
+                            <td>{{ r.created_at }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_auto_reply') }}" style="display:inline;">
+                                    <input type="hidden" name="reply_id" value="{{ r.id }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('حذف بشه؟')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: #a5b4fc; text-align: center; padding: 30px;">هنوز پاسخی تعریف نشده. از فرم کناری اضافه کن.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

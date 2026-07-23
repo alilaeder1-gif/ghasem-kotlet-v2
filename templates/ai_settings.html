@@ -3,38 +3,100 @@
 {% block title %}تنظیمات AI - پنل مدیریت{% endblock %}
 
 {% block content %}
-<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-brain"></i> تنظیمات هوش مصنوعی ({{ personas|length }})</h2>
+<h2 style="color: #fff; margin-bottom: 30px;"><i class="fas fa-brain"></i> تنظیمات هوش مصنوعی</h2>
 
-<div class="card-custom">
-    <div class="card-body">
-        <table class="table table-custom">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>گروه</th>
-                    <th>اسم</th>
-                    <th>پرامپت</th>
-                    <th>وضعیت</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in personas %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ p.group_title[:25] }}...</td>
-                    <td><strong>{{ p.persona_name }}</strong></td>
-                    <td style="font-size: 0.8rem;">{{ p.system_prompt[:80] }}{% if p.system_prompt|length > 80 %}...{% endif %}</td>
-                    <td>
-                        {% if p.is_enabled %}
-                            <span class="badge bg-success">فعال</span>
-                        {% else %}
-                            <span class="badge bg-secondary">غیرفعال</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-plus"></i> افزودن/ویرایش شخصیت
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">گروه:</label>
+                        <select name="chat_id" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                            <option value="">انتخاب گروه...</option>
+                            {% for g in groups %}
+                            <option value="{{ g.chat_id }}">{{ g.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">اسم شخصیت:</label>
+                        <input type="text" name="persona_name" class="form-control" value="کُتلت" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>
+                    </div>
+                    <div class="mb-3">
+                        <label style="color: #a5b4fc;">دستور سیستم (system prompt):</label>
+                        <textarea name="system_prompt" rows="5" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" required>تو کُتلتی، یه رفیق پرحرف و باحال تو گروه تلگرامی...</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_enabled" class="form-check-input" checked>
+                            <label class="form-check-label" style="color: #a5b4fc;">فعال</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save"></i> ذخیره
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-list"></i> شخصیت‌ها ({{ personas|length }})
+            </div>
+            <div class="card-body">
+                {% if personas %}
+                <table class="table table-custom">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>گروه</th>
+                            <th>اسم</th>
+                            <th>پرامپت</th>
+                            <th>وضعیت</th>
+                            <th>عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in personas %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ p.title[:25] }}{% if p.title|length > 25 %}...{% endif %}</td>
+                            <td><strong>{{ p.persona_name }}</strong></td>
+                            <td style="font-size: 0.75rem;">{{ p.system_prompt[:80] }}{% if p.system_prompt|length > 80 %}...{% endif %}</td>
+                            <td>
+                                {% if p.is_enabled %}
+                                    <span class="badge bg-success">فعال</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">غیرفعال</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="chat_id" value="{{ p.chat_id }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('حذف بشه؟')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: #a5b4fc; text-align: center; padding: 20px;">هنوز شخصیتی تنظیم نشده. از فرم کناری یه شخصیت بسازید.</p>
+                <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-top: 10px;">
+                    <p style="color: #f59e0b;"><strong>💡 پیش‌فرض:</strong></p>
+                    <p style="color: #e2e8f0; font-size: 0.85rem;">کتلت — یه رفیق پرحرف و باحال تو گروه. شوخ طبع ۷۰٪، جدی ۳۰٪. اسمش کتلته، بعضیا صداش میکنن کتی یا قاسم. جوابات باید ایرانی و دوستانه باشه.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

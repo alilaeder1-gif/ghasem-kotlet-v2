@@ -226,4 +226,111 @@
         </div>
     </div>
 </div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-ban"></i> کاربران بن شده
+            </div>
+            <div class="card-body">
+                {% if bans %}
+                <table class="table table-custom">
+                    <thead>
+                        <tr><th>آیدی کاربر</th><th>دلیل</th><th>تاریخ</th><th>عملیات</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for b in bans %}
+                        <tr>
+                            <td>{{ b.user_id }}</td>
+                            <td>{{ b.reason or '-' }}</td>
+                            <td>{{ b.banned_at }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('group_unban', chat_id=group.chat_id, user_id=b.user_id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-success">آزاد کردن</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: #6b7280;">کاربری بن نشده.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-volume-off"></i> کاربران میوت شده
+            </div>
+            <div class="card-body">
+                {% if mutes %}
+                <table class="table table-custom">
+                    <thead>
+                        <tr><th>آیدی کاربر</th><th>دلیل</th><th>مدت</th><th>تاریخ</th><th>عملیات</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for m in mutes %}
+                        <tr>
+                            <td>{{ m.user_id }}</td>
+                            <td>{{ m.reason or '-' }}</td>
+                            <td>{{ m.mute_duration }} ثانیه</td>
+                            <td>{{ m.muted_at }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('group_unmute', chat_id=group.chat_id, user_id=m.user_id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-success">آزاد کردن</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: #6b7280;">کاربری میوت نشده.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-paper-plane"></i> ارسال پیام به گروه
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('group_send_message', chat_id=group.chat_id) }}">
+                    <div class="mb-3">
+                        <textarea name="message" rows="3" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 10px;" placeholder="متن پیام..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-paper-plane"></i> ارسال
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-cog"></i> کنترل ربات
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('group_toggle_ai', chat_id=group.chat_id) }}" style="margin-bottom: 10px;">
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="fas fa-brain"></i> {% if settings and settings.ai_chat_enabled %}غیرفعال کردن AI{% else %}فعال کردن AI{% endif %}
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('group_leave', chat_id=group.chat_id) }}" onsubmit="return confirm('مطمئنی ربات از گروه خارج بشه؟')">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="fas fa-sign-out-alt"></i> خروج از گروه
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

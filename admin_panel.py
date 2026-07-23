@@ -6,7 +6,7 @@ import json
 import random
 import requests
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -213,8 +213,128 @@ def group_detail(chat_id):
     commands = conn.execute('SELECT * FROM custom_commands WHERE chat_id=?', (chat_id,)).fetchall()
     replies = conn.execute('SELECT * FROM auto_replies WHERE chat_id=?', (chat_id,)).fetchall()
     chat_count = conn.execute('SELECT COUNT(*) as cnt FROM chat_history WHERE chat_id=?', (chat_id,)).fetchone()['cnt']
+    bans = conn.execute('SELECT * FROM banned_users WHERE chat_id=? ORDER BY banned_at DESC', (chat_id,)).fetchall()
+    mutes = conn.execute('SELECT * FROM muted_users WHERE chat_id=? ORDER BY muted_at DESC', (chat_id,)).fetchall()
     conn.close()
-    return render_template('group_detail.html', group=group, users=users, admin_users=admin_users, settings=settings, persona=persona, commands=commands, replies=replies, chat_count=chat_count)
+    return render_template('group_detail.html', group=group, users=users, admin_users=admin_users, settings=settings, persona=persona, commands=commands, replies=replies, chat_count=chat_count, bans=bans, mutes=mutes)
+
+
+@app.route('/group/<int:chat_id>/leave', methods=['POST'])
+@login_required
+def group_leave(chat_id):
+    try:
+        r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/leaveChat', json={'chat_id': chat_id}, timeout=10)
+        if r.status_code == 200:
+            conn = get_db()
+            conn.execute('UPDATE bot_groups SET is_active=0 WHERE chat_id=?', (chat_id,))
+            conn.commit()
+            conn.close()
+            flash(f'✅ ربات از گروه خارج شد.', 'success')
+        else:
+            flash(f'❌ خطا: {r.text[:100]}', 'error')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    return redirect(url_for('groups'))
+
+
+@app.route('/group/<int:chat_id>/toggle-ai', methods=['POST'])
+@login_required
+def group_toggle_ai(chat_id):
+    conn = get_db()
+    settings = conn.execute('SELECT * FROM group_settings WHERE chat_id=?', (chat_id,)).fetchone()
+    if settings:
+        new_val = 0 if settings['ai_chat_enabled'] else 1
+        conn.execute('UPDATE group_settings SET ai_chat_enabled=? WHERE chat_id=?', (new_val, chat_id))
+    else:
+        conn.execute('INSERT INTO group_settings (chat_id, ai_chat_enabled) VALUES (?, 0)', (chat_id,))
+        new_val = 0
+    conn.commit()
+    conn.close()
+    flash(f'✅ AI در این گروه {"فعال" if new_val else "غیرفعال"} شد.', 'success')
+    return redirect(url_for('group_detail', chat_id=chat_id))
+
+
+@app.route('/group/<int:chat_id>/send-message', methods=['POST'])
+@login_required
+def group_send_message(chat_id):
+    msg = request.form.get('message', '').strip()
+    if not msg:
+        flash('❌ متن پیام خالیه!', 'error')
+        return redirect(url_for('group_detail', chat_id=chat_id))
+    try:
+        r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', json={'chat_id': chat_id, 'text': msg, 'parse_mode': 'HTML'}, timeout=10)
+        if r.status_code == 200:
+            flash('✅ پیام ارسال شد.', 'success')
+        else:
+            flash(f'❌ خطا: {r.text[:100]}', 'error')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    return redirect(url_for('group_detail', chat_id=chat_id))
+
+
+@app.route('/group/<int:chat_id>/unban/<int:user_id>', methods=['POST'])
+@login_required
+def group_unban(chat_id, user_id):
+    try:
+        r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/unbanChatMember', json={'chat_id': chat_id, 'user_id': user_id}, timeout=10)
+        conn = get_db()
+        conn.execute('DELETE FROM banned_users WHERE chat_id=? AND user_id=?', (chat_id, user_id))
+        conn.commit()
+        conn.close()
+        flash(f'✅ کاربر {user_id} از بن خارج شد.', 'success')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    return redirect(url_for('group_detail', chat_id=chat_id))
+
+
+@app.route('/group/<int:chat_id>/unmute/<int:user_id>', methods=['POST'])
+@login_required
+def group_unmute(chat_id, user_id):
+    try:
+        conn = get_db()
+        conn.execute('DELETE FROM muted_users WHERE chat_id=? AND user_id=?', (chat_id, user_id))
+        conn.commit()
+        conn.close()
+        flash(f'✅ کاربر {user_id} از میوت خارج شد.', 'success')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    return redirect(url_for('group_detail', chat_id=chat_id))
+
+
+@app.route('/auto-replies/add', methods=['POST'])
+@login_required
+def add_auto_reply():
+    chat_id = request.form.get('chat_id', '').strip()
+    keyword = request.form.get('keyword', '').strip()
+    response = request.form.get('response', '').strip()
+    is_regex = 1 if request.form.get('is_regex') else 0
+    if not chat_id or not keyword or not response:
+        flash('❌ همه فیلدها رو پر کن!', 'error')
+        return redirect(url_for('auto_replies'))
+    conn = get_db()
+    try:
+        conn.execute('INSERT INTO auto_replies (chat_id, keyword, response, is_regex, created_by) VALUES (?, ?, ?, ?, 0)', (int(chat_id), keyword, response, is_regex))
+        conn.commit()
+        flash('✅ پاسخ خودکار اضافه شد.', 'success')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    conn.close()
+    return redirect(url_for('auto_replies'))
+
+
+@app.route('/auto-replies/delete', methods=['POST'])
+@login_required
+def delete_auto_reply():
+    reply_id = request.form.get('reply_id', '').strip()
+    if not reply_id:
+        flash('❌ آیدی پاسخ پیدا نشد.', 'error')
+        return redirect(url_for('auto_replies'))
+    conn = get_db()
+    conn.execute('DELETE FROM auto_replies WHERE id=?', (reply_id,))
+    conn.commit()
+    conn.close()
+    flash('✅ پاسخ خودکار حذف شد.', 'success')
+    return redirect(url_for('auto_replies'))
 
 
 @app.route('/users')
@@ -273,8 +393,9 @@ def commands():
 def auto_replies():
     conn = get_db()
     data = conn.execute('SELECT ar.*, bg.title FROM auto_replies ar LEFT JOIN bot_groups bg ON ar.chat_id=bg.chat_id ORDER BY ar.created_at DESC').fetchall()
+    groups = conn.execute('SELECT chat_id, title FROM bot_groups WHERE is_active=1').fetchall()
     conn.close()
-    return render_template('auto_replies.html', replies=data)
+    return render_template('auto_replies.html', replies=data, groups=groups)
 
 
 @app.route('/broadcast', methods=['GET', 'POST'])
