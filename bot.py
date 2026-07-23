@@ -13,7 +13,7 @@ from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
+from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory
 from handlers.fun import reminder_worker
 
 
@@ -125,7 +125,13 @@ async def main():
         except:
             history = []
 
-        response = await ask_ai(user_msg, system_prompt, history)
+        user_memory = ""
+        try:
+            user_memory = await db.get_user_memory(message.from_user.id, message.chat.id)
+        except:
+            pass
+
+        response = await ask_ai(user_msg, system_prompt, history, user_memory)
 
         if response.startswith("⚠") or response.startswith("⏳"):
             await message.reply(response)
@@ -134,6 +140,12 @@ async def main():
         try:
             await message.reply(response)
             await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
+            try:
+                new_memory = await extract_memory(user_msg, response, user_memory)
+                if new_memory and new_memory != user_memory:
+                    await db.save_user_memory(message.from_user.id, message.chat.id, new_memory)
+            except:
+                pass
         except:
             pass
 

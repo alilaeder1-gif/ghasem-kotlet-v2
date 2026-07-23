@@ -110,8 +110,11 @@ async def web_search(query: str, max_results: int = 5) -> str:
         return ""
 
 
-async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None) -> str:
+async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None, user_memory: str = "") -> str:
     prompt = system_prompt or DEFAULT_PROMPT
+    if user_memory:
+        prompt += f"\n\n[حافظه من از این کاربر: {user_memory}]"
+
     cached = await cache.get_ai_response(user_message, prompt)
     if cached:
         return cached
@@ -123,15 +126,35 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         search_results = await web_search(query)
         if search_results:
             search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
-            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+            response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt, chat_history)
         else:
             response = "نمدونم والا، نتونستم چیزی پیدا کنم."
-    elif response.startswith("SEARCH"):
-        search_result = await web_search(user_message)
-        if search_result:
-            search_context = SEARCH_PROMPT_TEMPLATE.format(query=user_message, results=search_result)
-            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
 
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
+
+
+MEMORY_EXTRACT_PROMPT = (
+    "کاربر این حرف رو زده: «{message}» و من (کتلت) این جواب رو دادم: «{response}». "
+    "حافظه قبلی من از این کاربر: {old_memory}\n\n"
+    "از این گفتگو چه نکته مهمی باید درباره کاربر به خاطر بسپارم؟ "
+    "فقط خلاصه رو بگو، حداکثر ۲ خط. اگه نکته جدیدی نیست، بگو: هیچ"
+)
+
+
+async def extract_memory(user_message: str, response: str, old_memory: str = "") -> str:
+    try:
+        prompt_text = MEMORY_EXTRACT_PROMPT.format(message=user_message[:200], response=response[:200], old_memory=old_memory or "هیچ")
+        extracted = await asyncio.to_thread(_call_deepseek, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
+        extracted = extracted.strip()
+        if not extracted or extracted == "هیچ" or len(extracted) < 5:
+            return old_memory
+        if old_memory:
+            combined = f"{old_memory} | {extracted}"
+            if len(combined) > 500:
+                combined = combined[:500]
+            return combined
+        return extracted[:500]
+    except:
+        return old_memory

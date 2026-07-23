@@ -159,6 +159,14 @@ class Database:
                 ai_chat_enabled INTEGER DEFAULT 1,
                 custom_title TEXT DEFAULT ''
             );
+
+            CREATE TABLE IF NOT EXISTS user_memory (
+                user_id INTEGER,
+                chat_id INTEGER,
+                memory TEXT DEFAULT '',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, chat_id)
+            );
         """)
         await self.db.commit()
         try:
@@ -422,6 +430,18 @@ class Database:
                     "custom_title": row["custom_title"]
                 }
             return None
+
+    async def get_user_memory(self, user_id: int, chat_id: int) -> str:
+        async with self.db.execute("SELECT memory FROM user_memory WHERE user_id = ? AND chat_id = ?", (user_id, chat_id)) as cursor:
+            row = await cursor.fetchone()
+            return row["memory"] if row else ""
+
+    async def save_user_memory(self, user_id: int, chat_id: int, memory: str):
+        await self.db.execute(
+            "INSERT OR REPLACE INTO user_memory (user_id, chat_id, memory, updated_at) VALUES (?, ?, ?, datetime('now'))",
+            (user_id, chat_id, memory)
+        )
+        await self.db.commit()
 
 
 db = Database()
