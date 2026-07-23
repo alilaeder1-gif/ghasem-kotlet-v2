@@ -17,6 +17,7 @@
                     <th>گروه‌ها</th>
                     <th>مجموع پیام</th>
                     <th>آخرین حضور</th>
+                    <th>ارسال پیام</th>
                 </tr>
             </thead>
             <tbody>
@@ -29,10 +30,27 @@
                     <td><span class="badge bg-primary">{{ user.group_count }}</span></td>
                     <td><span class="badge bg-success">{{ user.total_messages }}</span></td>
                     <td>{{ user.last_seen or '-' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('send_user_message') }}" style="display: flex; gap: 5px;">
+                            <input type="hidden" name="user_id" value="{{ user.user_id }}">
+                            <input type="text" name="message" placeholder="متن پیام..." class="form-control" style="width: 120px; font-size: 0.7rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 5px;" required>
+                            <button type="submit" class="btn btn-sm btn-primary" title="ارسال پیام خصوصی">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+setTimeout(function() {
+    document.querySelectorAll('.alert').forEach(function(a) { a.remove(); });
+}, 5000);
+</script>
 {% endblock %}

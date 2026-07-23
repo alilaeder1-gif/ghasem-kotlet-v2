@@ -337,6 +337,25 @@ def delete_auto_reply():
     return redirect(url_for('auto_replies'))
 
 
+@app.route('/user/send', methods=['POST'])
+@login_required
+def send_user_message():
+    user_id = request.form.get('user_id', '').strip()
+    message = request.form.get('message', '').strip()
+    if not user_id or not message:
+        flash('❌ همه فیلدها رو پر کن!', 'error')
+        return redirect(url_for('users'))
+    try:
+        r = requests.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage', json={'chat_id': int(user_id), 'text': message, 'parse_mode': 'HTML'}, timeout=10)
+        if r.status_code == 200:
+            flash(f'✅ پیام به {user_id} ارسال شد.', 'success')
+        else:
+            flash(f'❌ خطا: {r.text[:100]}', 'error')
+    except Exception as e:
+        flash(f'❌ خطا: {e}', 'error')
+    return redirect(url_for('users'))
+
+
 @app.route('/users')
 @login_required
 def users():

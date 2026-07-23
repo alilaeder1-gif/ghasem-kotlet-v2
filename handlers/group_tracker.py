@@ -34,6 +34,7 @@ async def track_group(message: Message):
         except:
             pass
         await db.add_or_update_user(message.chat.id, u.id, u.username or "", u.full_name or "", is_admin)
+        await db.increment_message_count(message.chat.id, u.id)
     except Exception as e:
         logger.error(f"user tracking error: {e}")
 
