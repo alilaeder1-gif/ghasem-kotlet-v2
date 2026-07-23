@@ -72,12 +72,10 @@ async def main():
 
     asyncio.create_task(reminder_worker())
 
-    @dp.message(F.text)
+    @dp.message(F.text, ~F.text.startswith("/"))
     async def ai_chat_handler(message: Message):
         print(f"=== AI_CHAT FROM BOT.PY ===", flush=True)
         user_msg = message.text.strip()
-        if user_msg.startswith("/"):
-            return
 
         if message.chat.type in ("group", "supergroup"):
             try:
