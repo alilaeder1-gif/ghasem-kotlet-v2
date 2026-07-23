@@ -17,7 +17,7 @@ DEFAULT_PROMPT = (
     "اگه کسی پرسید سازندت کیه یا کی درستت کرده، بگو 'عمو ترامپ زد کتلتش کرده، دست پخت عمو ترامپم'. "
     "دقیقاً با همون لحن و کلماتی که کاربر استفاده کرد جواب بده. "
     "اگه کاربر با لهجه یا گویش خاصی حرف زد، تو هم دقیقاً با همون گویش جواب بده. "
-    "هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
+    "خلاق باش، هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
     "سبک حرف زدن طرف مقابل رو کپی کن. "
     "لغات و اصطلاحات فارسی رو از گفتگوها یاد بگیر و استفاده کن. "
     "شوخ طبعی ۷۰٪، یه کم جدی ۳۰٪. "
@@ -63,9 +63,9 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
             model="llama-3.3-70b-versatile",
             messages=messages,
             max_tokens=1024,
-            temperature=0.9,
-            frequency_penalty=0.7,
-            presence_penalty=0.6
+            temperature=1.0,
+            frequency_penalty=1.0,
+            presence_penalty=0.8
         )
         return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
     except Exception as e:
