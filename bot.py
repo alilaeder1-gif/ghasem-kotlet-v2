@@ -73,7 +73,7 @@ async def main():
                 and message.reply_to_message.from_user
                 and message.reply_to_message.from_user.id == bot_info.id
             )
-            is_name_called = any(k in user_msg.lower() for k in ["کتلت", "کتی", "kotlet", "قاسم"])
+            is_name_called = any(k in user_msg.lower() for k in ["کتلت", "کتی", "kotlet", "قاسم", "سلام"])
             if not is_mention and not is_reply and not is_name_called:
                 return
             if is_mention:
