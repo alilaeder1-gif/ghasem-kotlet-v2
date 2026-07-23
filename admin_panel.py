@@ -33,7 +33,7 @@ if REDIS_ENABLED:
 
 def get_db():
     db_path = DATABASE_PATH
-    candidates = ['/tmp/bot_data.db', db_path, '/app/bot_data.db', '/app/data/bot_data.db', 'bot_data.db']
+    candidates = ['/data/bot_data.db', '/tmp/bot_data.db', db_path, '/app/bot_data.db', '/app/data/bot_data.db', 'bot_data.db']
     found = False
     for path in candidates:
         try:

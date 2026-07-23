@@ -7,6 +7,7 @@ from config import DATABASE_PATH
 logger = logging.getLogger(__name__)
 
 CANDIDATE_PATHS = [
+    '/data/bot_data.db',
     '/tmp/bot_data.db',
     DATABASE_PATH,
     '/app/bot_data.db',
@@ -95,6 +96,8 @@ class Database:
                 response TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE INDEX IF NOT EXISTS idx_chat_history_chat_ts ON chat_history(chat_id, timestamp);
 
             CREATE TABLE IF NOT EXISTS ai_persona (
                 chat_id INTEGER PRIMARY KEY,
