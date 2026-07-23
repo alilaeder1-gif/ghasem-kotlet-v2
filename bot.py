@@ -11,7 +11,7 @@ from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY
 from database import db
 from cache import cache
-from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
+from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory
 from handlers.fun import reminder_worker
@@ -63,6 +63,7 @@ async def main():
     dp.message.middleware(AntiFloodMiddleware())
 
     dp.include_router(admin.router)
+    dp.include_router(admin_bot.router)
     dp.include_router(misc.router)
     dp.include_router(welcome.router)
     dp.include_router(rules.router)

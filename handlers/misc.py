@@ -45,9 +45,7 @@ async def cmd_start(message: Message):
             "/delreply - حذف پاسخ خودکار\n"
             "/listreplies - لیست پاسخ‌ها\n\n"
             "🤖 چت هوشمند:\n"
-            "@کُتلت + پیام - چت با هوش مصنوعی\n\n"
-            "🔐 ادمین‌ها:\n"
-            "/panel - پنل مدیریت وب"
+            "@کُتلت + پیام - چت با هوش مصنوعی"
         )
 
     await message.answer(
@@ -64,8 +62,7 @@ async def cmd_start(message: Message):
         "/tag - منشن همه اعضا\n"
         "/game - بازی حدس کلمه\n"
         "/summary - خلاصه گروه\n"
-        "/remind - یادآوری\n"
-        "/panel - پنل مدیریت وب\n\n"
+        "/remind - یادآوری\n\n"
         "🤖 چت هوشمند:\n"
         "@کُتلت + پیام - با هوش مصنوعی حرف بزنید"
     )
@@ -74,22 +71,6 @@ async def cmd_start(message: Message):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     await cmd_start(message)
-
-
-@router.message(Command("panel"))
-async def cmd_panel(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return await message.reply("⛔ دسترسی نداری.")
-    await message.answer(
-        "🔐 پنل مدیریت:\n\n"
-        "از لینک زیر وارد پنل مدیریت گروه‌ها و تنظیمات بشو:\n"
-        "https://ghasem-kotlet-v2-chat.up.railway.app\n\n"
-        "برای ورود باید:\n"
-        "1. روی Telegram Login کلیک کن\n"
-        "2. ایدی ادمین رو وارد کن\n"
-        "3. کد تایید توی ربات برات میاد\n"
-        "4. پسورد رو بزن"
-    )
 
 
 @router.message(Command("stats"))
