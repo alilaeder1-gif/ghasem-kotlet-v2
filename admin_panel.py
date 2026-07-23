@@ -180,10 +180,11 @@ def dashboard():
     users = conn.execute('SELECT COUNT(DISTINCT user_id) as cnt FROM group_users').fetchone()['cnt']
     total_msgs = conn.execute('SELECT COALESCE(SUM(message_count),0) as t FROM group_users').fetchone()['t']
     cmds = conn.execute('SELECT COUNT(*) as cnt FROM custom_commands').fetchone()['cnt']
+    chat_count = conn.execute('SELECT COUNT(*) as cnt FROM chat_history').fetchone()['cnt']
     top_groups = conn.execute('SELECT * FROM bot_groups WHERE is_active=1 ORDER BY member_count DESC LIMIT 5').fetchall()
     recent_users = conn.execute('SELECT gu.*, bg.title FROM group_users gu JOIN bot_groups bg ON gu.chat_id=bg.chat_id ORDER BY gu.last_seen DESC LIMIT 10').fetchall()
     conn.close()
-    return render_template('dashboard.html', groups=groups, users=users, total_messages=total_msgs, commands=cmds, top_groups=top_groups, recent_users=recent_users)
+    return render_template('dashboard.html', groups=groups, users=users, total_messages=total_msgs, commands=cmds, chat_count=chat_count, top_groups=top_groups, recent_users=recent_users)
 
 
 @app.route('/groups')

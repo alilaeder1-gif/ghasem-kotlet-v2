@@ -42,6 +42,15 @@
             <p>دستور سفارشی</p>
         </div>
     </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="icon" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">
+                <i class="fas fa-history"></i>
+            </div>
+            <h3>{{ chat_count }}</h3>
+            <p>مکالمه ثبت شده</p>
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -92,7 +101,7 @@
                         {% for user in recent_users %}
                         <tr>
                             <td>{{ user.full_name }}</td>
-                            <td style="font-size: 0.8rem;">{{ user.group_title[:20] }}...</td>
+                            <td style="font-size: 0.8rem;">{{ user.title[:20] }}...</td>
                             <td><span class="badge bg-success">{{ user.message_count }}</span></td>
                         </tr>
                         {% endfor %}
