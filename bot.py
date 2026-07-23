@@ -72,6 +72,12 @@ async def main():
             return
 
         if message.chat.type in ("group", "supergroup"):
+            try:
+                await db.add_group(message.chat.id, message.chat.title or "بدون نام", message.chat.username or "")
+                member_count = await message.bot.get_chat_member_count(message.chat.id)
+                await db.update_group_member_count(message.chat.id, member_count)
+            except:
+                pass
             bot_info = await message.bot.get_me()
             is_mention = f"@{bot_info.username}" in user_msg
             is_reply = (
