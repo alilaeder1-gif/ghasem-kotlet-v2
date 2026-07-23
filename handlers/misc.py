@@ -10,6 +10,7 @@ router = Router()
 async def cmd_start(message: Message):
     if message.chat.type in ("group", "supergroup"):
         return await message.reply(
+            "سلام جوون! کُتلتم، رفیق باحال گروه. هر کی حوصله‌ش سر رفت من اینجام 😎\n\n"
             "🤖 کُتلت - ربات مدیریت گروه\n\n"
             "📋 دستورات مدیریتی:\n"
             "/rules - نمایش قوانین\n"
