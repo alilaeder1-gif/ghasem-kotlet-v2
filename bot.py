@@ -6,14 +6,14 @@ import tempfile
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message
 from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, text_to_speech, DEFAULT_PROMPT
+from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
 from handlers.fun import reminder_worker
 
 
@@ -180,14 +180,7 @@ async def main():
             if response.startswith("⚠") or response.startswith("⏳"):
                 await message.reply(response)
             else:
-                audio_path = await text_to_speech(response)
-                if audio_path:
-                    try:
-                        await message.reply_voice(FSInputFile(audio_path))
-                    except:
-                        await message.reply(response)
-                else:
-                    await message.reply(response)
+                await message.reply(f"🎤 {response}")
         except Exception as e:
             await message.reply(f"⚠️ خطا: {str(e)[:100]}")
 
