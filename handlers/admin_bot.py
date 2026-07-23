@@ -11,44 +11,34 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-@router.message(Command("ghasemkotlet"), F.chat.type == "private")
+def _private_only(message: Message) -> bool:
+    if message.chat.type != "private":
+        return True
+    return False
+
+
+@router.message(Command("ghasemkotlet"))
 async def admin_menu(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     await message.answer(
         "🔐 پنل مدیریت بات\n\n"
-        "📊 /stats - آمار کلی بات\n"
         "👥 /groups - لیست گروه‌ها\n"
         "👤 /users - لیست کاربران\n"
         "💬 /g <chat_id> - جزئیات گروه\n"
         "✉️ /gmsg <chat_id> <متن> - ارسال پیام به گروه\n"
         "📋 /ghistory <chat_id> - آخرین مکالمات گروه\n"
         "🔄 /gtoggle <chat_id> - فعال/غیرفعال AI گروه\n"
-        "🚪 /gleave <chat_id> - خروج از گروه\n"
-        "📢 /broadcast <متن> - ارسال به همه گروه‌ها"
+        "🚪 /gleave <chat_id> - خروج از گروه"
     )
 
 
-@router.message(Command("stats"), F.chat.type == "private")
-async def bot_stats(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    try:
-        groups = await db.get_all_groups()
-        users_data = await db.get_all_users()
-        group_count = len(groups)
-        user_count = len(users_data)
-        await message.answer(
-            f"📊 آمار کلی بات:\n\n"
-            f"👥 گروه‌ها: {group_count}\n"
-            f"👤 کاربران: {user_count}"
-        )
-    except Exception as e:
-        await message.answer(f"خطا: {e}")
-
-
-@router.message(Command("groups"), F.chat.type == "private")
+@router.message(Command("groups"))
 async def list_groups(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     groups = await db.get_all_groups()
@@ -60,8 +50,10 @@ async def list_groups(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("users"), F.chat.type == "private")
+@router.message(Command("users"))
 async def list_users(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     users = await db.get_all_users()
@@ -74,8 +66,10 @@ async def list_users(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("g"), F.chat.type == "private")
+@router.message(Command("g"))
 async def group_detail(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     args = message.text.replace("/g", "").strip()
@@ -104,8 +98,10 @@ async def group_detail(message: Message):
     )
 
 
-@router.message(Command("gmsg"), F.chat.type == "private")
+@router.message(Command("gmsg"))
 async def group_send(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     parts = message.text.replace("/gmsg", "").strip().split(None, 1)
@@ -123,8 +119,10 @@ async def group_send(message: Message):
         await message.answer(f"❌ خطا: {e}")
 
 
-@router.message(Command("ghistory"), F.chat.type == "private")
+@router.message(Command("ghistory"))
 async def group_history(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     args = message.text.replace("/ghistory", "").strip()
@@ -147,8 +145,10 @@ async def group_history(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("gtoggle"), F.chat.type == "private")
+@router.message(Command("gtoggle"))
 async def group_toggle(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     args = message.text.replace("/gtoggle", "").strip()
@@ -169,8 +169,10 @@ async def group_toggle(message: Message):
         await message.answer("AI گروه فعال شد.")
 
 
-@router.message(Command("gleave"), F.chat.type == "private")
+@router.message(Command("gleave"))
 async def group_leave(message: Message):
+    if message.chat.type != "private":
+        return
     if not is_admin(message.from_user.id):
         return
     args = message.text.replace("/gleave", "").strip()
@@ -186,24 +188,3 @@ async def group_leave(message: Message):
         await message.answer("✅ خارج شدم.")
     except Exception as e:
         await message.answer(f"❌ خطا: {e}")
-
-
-@router.message(Command("broadcast"), F.chat.type == "private")
-async def cmd_broadcast(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    text = message.text.replace("/broadcast", "").strip()
-    if not text:
-        return await message.answer("متن پیام رو بنویس. مثال: /broadcast سلام به همه")
-    groups = await db.get_all_groups()
-    if not groups:
-        return await message.answer("هیچ گروهی نیست.")
-    success = 0
-    failed = 0
-    for g in groups:
-        try:
-            await message.bot.send_message(g["chat_id"], text)
-            success += 1
-        except:
-            failed += 1
-    await message.answer(f"✅ ارسال: {success}\n❌ ناموفق: {failed}")
