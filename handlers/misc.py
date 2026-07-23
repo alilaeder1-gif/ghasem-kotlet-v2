@@ -9,7 +9,7 @@ router = Router()
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     if message.chat.type in ("group", "supergroup"):
-        return await message.reply(
+        return await message.answer(
             "🤖 کُتلت - ربات مدیریت گروه\n\n"
             "📋 دستورات مدیریتی:\n"
             "/rules - نمایش قوانین\n"
@@ -46,7 +46,7 @@ async def cmd_start(message: Message):
             "@کُتلت + پیام - چت با هوش مصنوعی"
         )
 
-    await message.reply(
+    await message.answer(
             "سلام! 👋\nمن کُتلت هستم، ربات مدیریت گروه.\n\n"
         "📋 دستورات ادمین:\n"
         "/ban - بن کاربر (ریپلای)\n"
