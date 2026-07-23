@@ -89,3 +89,15 @@ async def cmd_stats(message: Message):
 @router.message(Command("id"))
 async def cmd_id(message: Message):
     await message.reply(f"🆔 آیدی عددی شما:\n<code>{message.from_user.id}</code>")
+
+
+@router.message(Command("draw"))
+async def cmd_draw(message: Message):
+    prompt = message.text.replace("/draw", "").replace("/draw@kotletaiBot", "").strip()
+    if not prompt:
+        return await message.reply("مثال: /draw گربه فضایی")
+    url = f"https://image.pollinations.ai/prompt/{prompt}?width=1024&height=1024&nologo=true"
+    try:
+        await message.reply_photo(photo=url, caption=f"🎨 {prompt}")
+    except:
+        await message.reply(url)

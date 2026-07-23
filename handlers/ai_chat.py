@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 from cache import cache
-from config import GROQ_API_KEY, OPENROUTER_API_KEY
+from config import GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +42,37 @@ SEARCH_PROMPT_TEMPLATE = (
     "حالا با استفاده از این اطلاعات به سوال کاربر جواب بده."
 )
 
-_deepseek_client = None
+_google_client = None
+_groq_client = None
 
 
-def get_deepseek():
-    global _deepseek_client
-    if _deepseek_client is not None:
-        return _deepseek_client
-    api_key = GROQ_API_KEY
-    if not api_key:
+def _get_google():
+    global _google_client
+    if _google_client is not None:
+        return _google_client
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        _google_client = model
+        return model
+    except Exception as e:
+        logger.error(f"Gemini init error: {e}")
+        return None
+
+
+def _get_groq():
+    global _groq_client
+    if _groq_client is not None:
+        return _groq_client
+    if not GROQ_API_KEY:
         return None
     try:
         from openai import OpenAI
-        _deepseek_client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-        return _deepseek_client
+        _groq_client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+        return _groq_client
     except Exception as e:
         logger.error(f"Groq init error: {e}")
         return None
@@ -75,18 +92,17 @@ OPENROUTER_MODELS = [
 ]
 
 
-def _get_openrouter_client():
-    key = OPENROUTER_API_KEY
-    if not key:
+def _get_openrouter():
+    if not OPENROUTER_API_KEY:
         return None
     try:
         from openai import OpenAI
-        return OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
+        return OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
     except:
         return None
 
 
-def _call_model(client, model: str, messages: list) -> str:
+def _call_groq(client, model: str, messages: list) -> str:
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -98,14 +114,27 @@ def _call_model(client, model: str, messages: list) -> str:
         )
         return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
     except Exception as e:
-        logger.warning(f"Model {model} failed: {str(e)[:100]}")
+        logger.warning(f"Groq {model} failed: {str(e)[:100]}")
+        return None
+
+
+def _call_google(user_message: str, system_prompt: str, chat_history: list = None) -> str:
+    model = _get_google()
+    if not model:
+        return None
+    try:
+        full_prompt = f"{system_prompt}\n\n{user_message}"
+        resp = model.generate_content(full_prompt)
+        return resp.text.strip() or "پاسخی دریافت نشد."
+    except Exception as e:
+        logger.warning(f"Gemini failed: {str(e)[:100]}")
         return None
 
 
 def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = None) -> str:
-    client = get_deepseek()
+    client = _get_groq()
     if not client:
-        return "⚠️ خطا: GROQ_API_KEY تنظیم نشده."
+        return None
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
         for msg in chat_history[-6:]:
@@ -113,16 +142,16 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
             messages.append({"role": role, "content": msg.get("content", "")})
     messages.append({"role": "user", "content": user_message})
     for model in MODELS:
-        result = _call_model(client, model, messages)
+        result = _call_groq(client, model, messages)
         if result is not None:
             return result
-    or_client = _get_openrouter_client()
+    or_client = _get_openrouter()
     if or_client:
         for model in OPENROUTER_MODELS:
-            result = _call_model(or_client, model, messages)
+            result = _call_groq(or_client, model, messages)
             if result is not None:
                 return result
-    return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
+    return None
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
@@ -159,7 +188,34 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+    response = None
+
+    # 1) Gemini 2.0 Flash
+    if GEMINI_API_KEY:
+        response = await asyncio.to_thread(_call_google, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+
+    # 2) Groq Llama
+    if not response:
+        response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+
+    # 3) OpenRouter
+    if not response:
+        or_client = _get_openrouter()
+        if or_client:
+            messages = [{"role": "system", "content": prompt + SEARCH_INSTRUCTION}]
+            if chat_history:
+                for msg in chat_history[-6:]:
+                    role = "user" if msg.get("role") == "user" else "assistant"
+                    messages.append({"role": role, "content": msg.get("content", "")})
+            messages.append({"role": "user", "content": user_message})
+            for model in OPENROUTER_MODELS:
+                result = _call_groq(or_client, model, messages)
+                if result is not None:
+                    response = result
+                    break
+
+    if not response:
+        return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
     if response.startswith("SEARCH:"):
         query = response[len("SEARCH:"):].strip()
@@ -167,13 +223,29 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         search_results = await web_search(query)
         if search_results:
             search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
-            response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
+            if GEMINI_API_KEY:
+                response = await asyncio.to_thread(_call_google, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                response = "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
         else:
-            response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+            if GEMINI_API_KEY:
+                response = await asyncio.to_thread(_call_google, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                response = "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
+
+
+async def generate_image(prompt: str) -> str:
+    import httpx
+    url = f"https://image.pollinations.ai/prompt/{prompt}?width=1024&height=1024&nologo=true"
+    return url
 
 
 MEMORY_EXTRACT_PROMPT = (
@@ -187,7 +259,12 @@ MEMORY_EXTRACT_PROMPT = (
 async def extract_memory(user_message: str, response: str, old_memory: str = "") -> str:
     try:
         prompt_text = MEMORY_EXTRACT_PROMPT.format(message=user_message[:200], response=response[:200], old_memory=old_memory or "هیچ")
-        extracted = await asyncio.to_thread(_call_deepseek, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
+        if GEMINI_API_KEY:
+            extracted = await asyncio.to_thread(_call_google, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
+        else:
+            extracted = await asyncio.to_thread(_call_deepseek, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
+        if not extracted:
+            return old_memory
         extracted = extracted.strip()
         if not extracted or extracted == "هیچ" or len(extracted) < 5:
             return old_memory
