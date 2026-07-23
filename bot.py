@@ -172,27 +172,47 @@ async def main():
         try:
             await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
             import io
-            import httpx
+            import speech_recognition as sr
+            import tempfile
+            import os
 
             file = await message.bot.get_file(message.voice.file_id)
             file_bytes = await message.bot.download_file(file.file_path)
             if isinstance(file_bytes, io.BytesIO):
                 file_bytes = file_bytes.getvalue()
 
-            api_key = GROQ_API_KEY
-            if not api_key:
-                return await message.reply("⚠️ خطا: API key تنظیم نشده.")
+            user_msg = ""
+            recognizer = sr.Recognizer()
 
-            resp = httpx.post(
-                "https://api.groq.com/openai/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                files={"file": ("voice.ogg", file_bytes, "audio/ogg")},
-                data={"model": "whisper-large-v3", "response_format": "json"},
-                timeout=30
-            )
-            if resp.status_code != 200:
-                return await message.reply(f"⚠️ نتونستم ویست رو بفهمم. ({resp.status_code})")
-            user_msg = resp.json().get("text", "").strip()
+            # اول با Groq Whisper
+            api_key = GROQ_API_KEY
+            if api_key:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+                        f.write(file_bytes)
+                        tmp_path = f.name
+                    with sr.AudioFile(tmp_path) as source:
+                        audio = recognizer.record(source)
+                    user_msg = recognizer.recognize_groq(audio, api_key=api_key)
+                    os.unlink(tmp_path)
+                except Exception as e:
+                    logger.warning(f"Groq STT failed: {e}")
+                    user_msg = ""
+
+            # fallback: Google رایگان
+            if not user_msg:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                        f.write(file_bytes)
+                        tmp_path = f.name
+                    with sr.AudioFile(tmp_path) as source:
+                        audio = recognizer.record(source)
+                    user_msg = recognizer.recognize_google(audio, language="fa-IR")
+                    os.unlink(tmp_path)
+                except Exception as e:
+                    logger.warning(f"Google STT failed: {e}")
+                    return await message.reply("⚠️ نتونستم ویست رو بفهمم.")
+
             if not user_msg:
                 return await message.reply("⚠️ چیزی نگفتی توی ویس.")
 
