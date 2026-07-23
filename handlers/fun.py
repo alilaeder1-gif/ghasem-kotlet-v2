@@ -208,3 +208,23 @@ async def list_reminders(message: Message):
             remaining = (r["time"] - datetime.now()).seconds // 60
             text += f"#{rid}: «{r['message']}» - {remaining} دقیقه دیگه\n"
     await message.reply(text)
+
+
+@router.message(Command("history"))
+async def cmd_history(message: Message):
+    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+        return await message.reply("فقط ادمین اصلی می‌تونه ببینه.")
+
+    try:
+        history = await db.get_chat_history(message.chat.id, limit=10)
+    except:
+        return await message.reply("مکالماتی ثبت نشده.")
+
+    if not history:
+        return await message.reply("مکالماتی ثبت نشده.")
+
+    text = "📋 آخرین مکالمات:\n\n"
+    for i, h in enumerate(history, 1):
+        role = "👤 کاربر" if h["role"] == "user" else "🤖 کتلت"
+        text += f"{i}. {role}: {h['content'][:200]}\n\n"
+    await message.reply(text[:4000])

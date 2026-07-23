@@ -330,6 +330,25 @@ def settings():
     return render_template('settings.html')
 
 
+@app.route('/chat-history')
+@login_required
+def chat_history():
+    conn = get_db()
+    group_id = request.args.get('group_id', '')
+    if group_id and group_id.isdigit():
+        data = conn.execute(
+            'SELECT ch.*, bg.title FROM chat_history ch LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id WHERE ch.chat_id=? ORDER BY ch.timestamp DESC LIMIT 100',
+            (group_id,)
+        ).fetchall()
+    else:
+        data = conn.execute(
+            'SELECT ch.*, bg.title FROM chat_history ch LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id ORDER BY ch.timestamp DESC LIMIT 200'
+        ).fetchall()
+    groups = conn.execute('SELECT chat_id, title FROM bot_groups WHERE is_active=1').fetchall()
+    conn.close()
+    return render_template('chat_history.html', messages=data, groups=groups, selected_group=group_id)
+
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=False)
