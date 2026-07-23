@@ -1,27 +1,16 @@
 from aiogram import Router, F
 from aiogram.types import Message
-from aiogram.filters import Command
 from database import db
 from config import ADMIN_IDS
 
 router = Router()
 
 
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
-
-
-def _private_only(message: Message) -> bool:
-    if message.chat.type != "private":
-        return True
-    return False
-
-
-@router.message(Command("ghasemkotlet"))
+@router.message(F.text == "/ghasemkotlet")
 async def admin_menu(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     await message.answer(
         "🔐 پنل مدیریت بات\n\n"
@@ -35,11 +24,11 @@ async def admin_menu(message: Message):
     )
 
 
-@router.message(Command("groups"))
+@router.message(F.text == "/groups")
 async def list_groups(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     groups = await db.get_all_groups()
     if not groups:
@@ -50,11 +39,11 @@ async def list_groups(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("users"))
+@router.message(F.text == "/users")
 async def list_users(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     users = await db.get_all_users()
     if not users:
@@ -66,11 +55,11 @@ async def list_users(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("g"))
+@router.message(F.text.startswith("/g ") | (F.text == "/g"))
 async def group_detail(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     args = message.text.replace("/g", "").strip()
     if not args:
@@ -98,11 +87,11 @@ async def group_detail(message: Message):
     )
 
 
-@router.message(Command("gmsg"))
+@router.message(F.text.startswith("/gmsg "))
 async def group_send(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     parts = message.text.replace("/gmsg", "").strip().split(None, 1)
     if len(parts) < 2:
@@ -119,11 +108,11 @@ async def group_send(message: Message):
         await message.answer(f"❌ خطا: {e}")
 
 
-@router.message(Command("ghistory"))
+@router.message(F.text.startswith("/ghistory "))
 async def group_history(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     args = message.text.replace("/ghistory", "").strip()
     if not args:
@@ -145,11 +134,11 @@ async def group_history(message: Message):
     await message.answer(text[:4000])
 
 
-@router.message(Command("gtoggle"))
+@router.message(F.text.startswith("/gtoggle "))
 async def group_toggle(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     args = message.text.replace("/gtoggle", "").strip()
     if not args:
@@ -169,11 +158,11 @@ async def group_toggle(message: Message):
         await message.answer("AI گروه فعال شد.")
 
 
-@router.message(Command("gleave"))
+@router.message(F.text.startswith("/gleave "))
 async def group_leave(message: Message):
     if message.chat.type != "private":
         return
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMIN_IDS:
         return
     args = message.text.replace("/gleave", "").strip()
     if not args:
