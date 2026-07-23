@@ -92,7 +92,8 @@ async def cb_users(cq: CallbackQuery):
     text = f"👤 **کاربران** ({len(users)})\n\n"
     for u in users[:30]:
         name = u["full_name"] or u["username"] or f"کاربر {u['user_id']}"
-        text += f"• {name} | 🆔 `{u['user_id']}` | 🏘 {u['groups']} گروه\n"
+        joined = (u["first_seen"] or "نامشخص")[:10]
+        text += f"• {name}\n  🆔 `{u['user_id']}` | 🏘 {u['groups']} گروه | 📅 {joined}\n\n"
     await cq.message.edit_text(text[:4000], reply_markup=_back_btn())
 
 

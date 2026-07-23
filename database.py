@@ -410,9 +410,9 @@ class Database:
             return [{"user_id": r["user_id"], "username": r["username"], "full_name": r["full_name"], "messages": r["message_count"]} for r in rows]
 
     async def get_all_users(self) -> list[dict]:
-        async with self.db.execute("SELECT DISTINCT user_id, username, full_name, COUNT(DISTINCT chat_id) as group_count FROM group_users GROUP BY user_id") as cursor:
+        async with self.db.execute("SELECT user_id, username, full_name, COUNT(DISTINCT chat_id) as group_count, MIN(first_seen) as first_seen FROM group_users GROUP BY user_id ORDER BY first_seen DESC") as cursor:
             rows = await cursor.fetchall()
-            return [{"user_id": r["user_id"], "username": r["username"], "full_name": r["full_name"], "groups": r["group_count"]} for r in rows]
+            return [{"user_id": r["user_id"], "username": r["username"], "full_name": r["full_name"], "groups": r["group_count"], "first_seen": r["first_seen"]} for r in rows]
 
     async def set_group_settings(self, chat_id: int, **kwargs):
         current = await self.get_group_settings(chat_id)
