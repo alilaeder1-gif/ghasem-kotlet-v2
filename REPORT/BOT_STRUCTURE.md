@@ -33,7 +33,20 @@ Voice Message → voice_handler
   └── 5) Reply با جواب 🎤
 ```
 
-## جریان پنل مدیریت
+## جریان پنل مدیریت (جدید — داخلی بات)
+
+```
+User → Private Chat → /ghasemkotlet
+  ├── /groups — لیست همه گروه‌ها
+  ├── /users — لیست کاربران
+  ├── /g <chat_id> — جزئیات گروه
+  ├── /gmsg <chat_id> <متن> — ارسال پیام
+  ├── /ghistory <chat_id> — تاریخچه
+  ├── /gtoggle <chat_id> — فعال/غیرفعال AI
+  └── /gleave <chat_id> — خروج از گروه
+```
+
+## جریان پنل مدیریت (قدیمی — وب، غیرفعال)
 
 ```
 User → Browser → Railway → Flask (admin_panel.py)
