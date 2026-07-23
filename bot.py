@@ -15,9 +15,35 @@ from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
 from handlers.fun import reminder_worker
 
 
-def normalize_persian(text):
-    text = re.sub(r'(.)\1{2,}', r'\1', text)
-    return text
+GREETING_PATTERNS = [
+    re.compile(r'س+ل+ا+م+'),        # سسسلالالالاممم
+    re.compile(r'چ+ط+و+ر+[یي]+'),   # چطوووورییی
+    re.compile(r'چ+ط+و+ر+ی+ن+'),    # چطورین
+    re.compile(r'چ+خ+ب+ر+'),        # چخبر
+    re.compile(r'د+ر+و+د+'),        # درود
+    re.compile(r'ع+ل+ی+ک+'),        # علیک
+    re.compile(r'خ+و+ب+[یي]+'),     # خوبی
+    re.compile(r'خ+و+ب+ی+ن+'),      # خوبین
+    re.compile(r'ح+ا+ل+ت+چ+ط+و+ر+'),# حالت چطور
+    re.compile(r'ح+ا+ل+ت+ش+و+م+ا+'),# حالت شما
+    re.compile(r'چ+ط+و+ر+[هه]+'),   # چطوره
+    re.compile(r'چ+ی+ز+ی+'),        # چیزی
+    re.compile(r'ک+ج+ا+[یي]+'),     # کجایی
+    re.compile(r'چ+ن+د+م+ی+ن+'),    # چندمین
+    re.compile(r'م+ا+ل+ی+'),        # مالی
+    re.compile(r'ت+و+[یي]+'),       # تویی
+    re.compile(r'ی+ه+ر+و+چ+ی+'),    # یهروچی
+    re.compile(r'ج+و+ن+م+'),        # جونم
+    re.compile(r'چ+ی+ز+ی+'),        # چیزی
+]
+
+
+def is_persian_greeting(text):
+    clean = re.sub(r'[\s\.\,\?\=\!\-]', '', text)
+    for p in GREETING_PATTERNS:
+        if p.search(clean):
+            return True
+    return False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,10 +112,8 @@ async def main():
                 and message.reply_to_message.from_user.id == bot_info.id
             )
             user_msg_lower = user_msg.lower()
-            norm_msg = normalize_persian(user_msg_lower)
-            is_name_called = any(k in norm_msg for k in ["کتلت", "کتی", "kotlet", "قاسم"])
-            greeting_words = ["سلام", "درود", "علیک", "چطوری", "چطورین", "چطوریین", "خوبی", "خوبین", "چه خبر", "حالت چطور"]
-            is_greeting = any(k in norm_msg for k in greeting_words)
+            is_name_called = any(k in user_msg_lower for k in ["کتلت", "کتی", "kotlet", "قاسم"])
+            is_greeting = is_persian_greeting(user_msg_lower)
             if is_greeting and message.reply_to_message:
                 is_reply_to_bot = (
                     message.reply_to_message.from_user
@@ -98,8 +122,6 @@ async def main():
                 if not is_reply_to_bot:
                     is_greeting = False
             if not is_mention and not is_reply and not is_name_called and not is_greeting:
-                return
-            if not is_mention and not is_reply and not is_name_called:
                 return
             if is_mention:
                 user_msg = user_msg.replace(f"@{bot_info.username}", "").strip()
