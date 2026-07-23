@@ -141,26 +141,27 @@ async def main():
     async def voice_handler(message: Message):
         try:
             await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-            file = await message.bot.get_file(message.voice.file_id)
-            ext = file.file_path.split(".")[-1] if file.file_path else "ogg"
-            tmp = os.path.join(tempfile.gettempdir(), f"voice_{message.voice.file_id}.{ext}")
-            await message.bot.download_file(file.file_path, tmp)
-
+            import io
             import httpx
+
+            file = await message.bot.get_file(message.voice.file_id)
+            file_bytes = await message.bot.download_file(file.file_path)
+            if isinstance(file_bytes, io.BytesIO):
+                file_bytes = file_bytes.getvalue()
+
             api_key = os.getenv("GROQ_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
             if not api_key:
                 return await message.reply("⚠️ خطا: API key تنظیم نشده.")
-            with open(tmp, "rb") as f:
-                resp = httpx.post(
-                    "https://api.groq.com/openai/v1/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    files={"file": (f"voice.{ext}", f, f"audio/{ext}")},
-                    data={"model": "whisper-large-v3-turbo", "language": "fa"},
-                    timeout=30
-                )
-            os.remove(tmp)
+
+            resp = httpx.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": ("voice.ogg", file_bytes, "audio/ogg")},
+                data={"model": "whisper-large-v3", "language": "fa"},
+                timeout=30
+            )
             if resp.status_code != 200:
-                return await message.reply("⚠️ نتونستم ویست رو بفهمم.")
+                return await message.reply(f"⚠️ نتونستم ویست رو بفهمم. ({resp.status_code})")
             user_msg = resp.json().get("text", "").strip()
             if not user_msg:
                 return await message.reply("⚠️ چیزی نگفتی توی ویس.")
