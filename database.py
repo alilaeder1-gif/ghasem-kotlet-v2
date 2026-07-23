@@ -243,6 +243,18 @@ class Database:
         )
         await self.db.commit()
 
+    async def get_chat_history(self, chat_id: int, limit: int = 10) -> list[dict]:
+        async with self.db.execute(
+            "SELECT message, response FROM chat_history WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?",
+            (chat_id, limit)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            result = []
+            for r in reversed(rows):
+                result.append({"message": r["message"]})
+                result.append({"message": r["response"]})
+            return result[-limit:]
+
     async def set_persona(self, chat_id: int, name: str, system_prompt: str):
         await self.db.execute(
             "INSERT OR REPLACE INTO ai_persona (chat_id, persona_name, system_prompt) VALUES (?, ?, ?)",

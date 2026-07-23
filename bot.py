@@ -117,7 +117,14 @@ async def main():
 
         system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        response = await ask_ai(user_msg, system_prompt)
+
+        try:
+            history = await db.get_chat_history(message.chat.id, limit=6)
+        except:
+            history = []
+        chat_history = [{"role": "user" if i % 2 == 0 else "assistant", "content": h.get("message", "")} for i, h in enumerate(history)]
+
+        response = await ask_ai(user_msg, system_prompt, chat_history)
 
         if response.startswith("⚠") or response.startswith("⏳"):
             await message.reply(response)
@@ -125,6 +132,7 @@ async def main():
 
         try:
             await message.reply(response)
+            await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
         except:
             pass
 

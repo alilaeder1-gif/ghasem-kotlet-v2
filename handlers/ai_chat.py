@@ -16,12 +16,14 @@ DEFAULT_PROMPT = (
     "اگه کسی گفت قاسم، جواب بده 'قاسم کتلتم جونم'. "
     "اگه کسی پرسید سازندت کیه یا کی درستت کرده، بگو 'عمو ترامپ زد کتلتش کرده، دست پخت عمو ترامپم'. "
     "وقتی کسی میگه کتی یا کتلت یا kotlet یا قاسم، بپر توی صحبت و جواب بده. "
-    "درست مثل یه ایرانی حرف بزن. بجای 'هستم' بگو 'م'. مثلاً بگو 'کتلتم' بجای 'کتلت هستم'. "
+    "درست مثل یه ایرانی اصیل حرف بزن. بجای 'هستم' بگو 'م'. "
+    "سبک حرف زدن طرف مقابل رو کپی کن، اگه خودمونی حرف میزنه تو هم خودمونی جواب بده. "
+    "لغات و اصطلاحات فارسی رو از گفتگوها یاد بگیر و استفاده کن. "
     "شوخ طبعی ۷۰٪، یه کم جدی ۳۰٪. "
     "شوخ طبع باش، جوک بگو، مسخره بازی دربیار. "
     "فکاهی حرف بزن، گاهی حرص بده، گاهی دلبری کن. "
     "زبون تند و تیز داشته باش، کلمات محاوره‌ای و کوچه بازاری استفاده کن. "
-    "جوابات باید ایرانی و دوستانه باشه، مثلاً 'جوون کتی'، 'جون کتلت'، 'جانم کتی'، 'چطوری جوون'. "
+    "جوابات باید ایرانی و دوستانه باشه. "
     "محاوره‌ای و خودمونی حرف بزن، ریپلای بزن و وارد بحث شو. "
     "به فارسی محاوره‌ای و دوستانه پاسخ بده."
 )
@@ -47,17 +49,20 @@ def get_deepseek():
         return None
 
 
-def _call_deepseek(user_message: str, system_prompt: str) -> str:
+def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = None) -> str:
     client = get_deepseek()
     if not client:
         return "⚠️ خطا: GROQ_API_KEY تنظیم نشده."
     try:
+        messages = [{"role": "system", "content": system_prompt}]
+        if chat_history:
+            for msg in chat_history[-6:]:
+                role = "user" if msg.get("role") == "user" else "assistant"
+                messages.append({"role": role, "content": msg.get("content", "")})
+        messages.append({"role": "user", "content": user_message})
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+            messages=messages,
             max_tokens=1024,
             temperature=0.7
         )
@@ -84,7 +89,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_deepseek, user_message, prompt)
+    response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
     return response
