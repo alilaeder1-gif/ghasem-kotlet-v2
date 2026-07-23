@@ -16,6 +16,8 @@ GROQ_KEYS = _split_keys(os.getenv("GROQ_KEYS", GROQ_API_KEY))
 GEMINI_KEYS = _split_keys(os.getenv("GEMINI_KEYS", GEMINI_API_KEY))
 OPENROUTER_KEYS = _split_keys(os.getenv("OPENROUTER_KEYS", OPENROUTER_API_KEY))
 
+DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_data.db")
+
 REDIS_URL = os.getenv("REDIS_URL", "") or os.getenv("REDIS_TLS_URL", "") or ""
 REDIS_ENABLED = bool(REDIS_URL)
 
