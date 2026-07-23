@@ -118,6 +118,22 @@ async def main():
         if persona and not persona["enabled"]:
             return
 
+        if message.chat.type in ("group", "supergroup"):
+            replies = await db.get_auto_replies(message.chat.id)
+            for r in replies:
+                keyword = r["keyword"].lower()
+                if r.get("is_regex", False):
+                    try:
+                        if re.search(keyword, user_msg.lower()):
+                            await message.reply(r["response"])
+                            return
+                    except:
+                        pass
+                else:
+                    if keyword in user_msg.lower():
+                        await message.reply(r["response"])
+                        return
+
         system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 

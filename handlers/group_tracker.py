@@ -9,7 +9,7 @@ router = Router()
 import logging
 logger = logging.getLogger(__name__)
 
-@router.message(F.chat.type.in_({"group", "supergroup"}))
+@router.message(F.chat.type.in_({"group", "supergroup"}), ~F.text.startswith("/"))
 async def track_group(message: Message):
     try:
         invite_link = ""

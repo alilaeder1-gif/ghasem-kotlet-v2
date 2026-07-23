@@ -109,24 +109,4 @@ async def list_auto_replies(message: Message):
     await message.reply(text)
 
 
-@router.message(F.text & ~F.text.startswith("/"))
-async def check_auto_replies(message: Message):
-    if not message.chat.type in ("group", "supergroup"):
-        return
-
-    text = message.text.lower()
-    replies = await db.get_auto_replies(message.chat.id)
-
-    for r in replies:
-        keyword = r["keyword"].lower()
-        if r["is_regex"]:
-            try:
-                if re.search(keyword, text):
-                    await message.reply(r["response"])
-                    return
-            except re.error:
-                pass
-        else:
-            if keyword in text:
-                await message.reply(r["response"])
-                return
+# auto-reply checking is now in bot.py ai_chat_handler
