@@ -483,18 +483,53 @@ def settings():
 def chat_history():
     conn = get_db()
     group_id = request.args.get('group_id', '')
+    search = request.args.get('search', '').strip()
+    limit = request.args.get('limit', '100')
+    try:
+        limit = int(limit)
+    except:
+        limit = 100
+    limit = min(limit, 500)
+
     if group_id and group_id.isdigit():
-        data = conn.execute(
-            'SELECT ch.*, bg.title FROM chat_history ch LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id WHERE ch.chat_id=? ORDER BY ch.timestamp DESC LIMIT 100',
-            (group_id,)
-        ).fetchall()
+        if search:
+            data = conn.execute(
+                'SELECT ch.*, bg.title, gu.full_name, gu.username FROM chat_history ch '
+                'LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id '
+                'LEFT JOIN group_users gu ON ch.user_id=gu.user_id AND ch.chat_id=gu.chat_id '
+                'WHERE ch.chat_id=? AND (ch.message LIKE ? OR ch.response LIKE ?) '
+                'ORDER BY ch.timestamp DESC LIMIT ?',
+                (group_id, f'%{search}%', f'%{search}%', limit)
+            ).fetchall()
+        else:
+            data = conn.execute(
+                'SELECT ch.*, bg.title, gu.full_name, gu.username FROM chat_history ch '
+                'LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id '
+                'LEFT JOIN group_users gu ON ch.user_id=gu.user_id AND ch.chat_id=gu.chat_id '
+                'WHERE ch.chat_id=? ORDER BY ch.timestamp DESC LIMIT ?',
+                (group_id, limit)
+            ).fetchall()
     else:
-        data = conn.execute(
-            'SELECT ch.*, bg.title FROM chat_history ch LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id ORDER BY ch.timestamp DESC LIMIT 200'
-        ).fetchall()
+        if search:
+            data = conn.execute(
+                'SELECT ch.*, bg.title, gu.full_name, gu.username FROM chat_history ch '
+                'LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id '
+                'LEFT JOIN group_users gu ON ch.user_id=gu.user_id AND ch.chat_id=gu.chat_id '
+                'WHERE ch.message LIKE ? OR ch.response LIKE ? '
+                'ORDER BY ch.timestamp DESC LIMIT ?',
+                (f'%{search}%', f'%{search}%', limit)
+            ).fetchall()
+        else:
+            data = conn.execute(
+                'SELECT ch.*, bg.title, gu.full_name, gu.username FROM chat_history ch '
+                'LEFT JOIN bot_groups bg ON ch.chat_id=bg.chat_id '
+                'LEFT JOIN group_users gu ON ch.user_id=gu.user_id AND ch.chat_id=gu.chat_id '
+                'ORDER BY ch.timestamp DESC LIMIT ?',
+                (limit,)
+            ).fetchall()
     groups = conn.execute('SELECT chat_id, title FROM bot_groups WHERE is_active=1').fetchall()
     conn.close()
-    return render_template('chat_history.html', messages=data, groups=groups, selected_group=group_id)
+    return render_template('chat_history.html', messages=data, groups=groups, selected_group=group_id, search=search, limit=limit)
 
 
 if __name__ == '__main__':
