@@ -166,12 +166,6 @@ async def main():
             if not user_msg:
                 return await message.reply("⚠️ چیزی نگفتی توی ویس.")
 
-            user_msg_lower = user_msg.lower()
-            is_name = any(k in user_msg_lower for k in ["کتلت", "کتی", "kotlet", "قاسم"])
-            is_greet = is_persian_greeting(user_msg_lower)
-            if message.chat.type in ("group", "supergroup") and not is_name and not is_greet:
-                return
-
             persona = await db.get_persona(message.chat.id)
             if persona and not persona["enabled"]:
                 return
