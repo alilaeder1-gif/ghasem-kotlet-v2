@@ -62,13 +62,9 @@ def get_deepseek():
 
 
 MODELS = [
-    "llama3-70b-8192",
-    "deepseek-r1-distill-llama-70b",
-    "qwen-2.5-32b",
     "llama-3.3-70b-versatile",
-    "mixtral-8x7b-32768",
-    "gemma2-9b-it",
     "llama-3.1-8b-instant",
+    "llama3-8b-8192",
 ]
 
 OPENROUTER_MODELS = [
