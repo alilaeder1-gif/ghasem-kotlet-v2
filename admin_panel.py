@@ -50,6 +50,11 @@ def get_db():
                 conn.close()
             except:
                 pass
+            try:
+                if os.path.exists(path) and os.path.getsize(path) == 0:
+                    os.remove(path)
+            except:
+                pass
             continue
     if not found:
         db_path = '/tmp/bot_data.db'
@@ -202,12 +207,14 @@ def group_detail(chat_id):
     conn = get_db()
     group = conn.execute('SELECT * FROM bot_groups WHERE chat_id=?', (chat_id,)).fetchone()
     users = conn.execute('SELECT * FROM group_users WHERE chat_id=? ORDER BY message_count DESC LIMIT 50', (chat_id,)).fetchall()
+    admin_users = conn.execute('SELECT * FROM group_users WHERE chat_id=? AND is_admin=1 ORDER BY message_count DESC', (chat_id,)).fetchall()
     settings = conn.execute('SELECT * FROM group_settings WHERE chat_id=?', (chat_id,)).fetchone()
     persona = conn.execute('SELECT * FROM ai_persona WHERE chat_id=?', (chat_id,)).fetchone()
     commands = conn.execute('SELECT * FROM custom_commands WHERE chat_id=?', (chat_id,)).fetchall()
     replies = conn.execute('SELECT * FROM auto_replies WHERE chat_id=?', (chat_id,)).fetchall()
+    chat_count = conn.execute('SELECT COUNT(*) as cnt FROM chat_history WHERE chat_id=?', (chat_id,)).fetchone()['cnt']
     conn.close()
-    return render_template('group_detail.html', group=group, users=users, settings=settings, persona=persona, commands=commands, replies=replies)
+    return render_template('group_detail.html', group=group, users=users, admin_users=admin_users, settings=settings, persona=persona, commands=commands, replies=replies, chat_count=chat_count)
 
 
 @app.route('/users')

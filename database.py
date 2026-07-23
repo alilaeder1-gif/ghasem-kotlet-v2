@@ -130,6 +130,7 @@ class Database:
                 chat_id INTEGER PRIMARY KEY,
                 title TEXT DEFAULT '',
                 username TEXT DEFAULT '',
+                invite_link TEXT DEFAULT '',
                 member_count INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -160,6 +161,11 @@ class Database:
             );
         """)
         await self.db.commit()
+        try:
+            await self.db.execute("ALTER TABLE bot_groups ADD COLUMN invite_link TEXT DEFAULT ''")
+            await self.db.commit()
+        except:
+            pass
 
     async def set_welcome(self, chat_id: int, message: str | None = None, is_enabled: bool = True):
         await self.db.execute(
@@ -321,10 +327,10 @@ class Database:
                 return True
         return False
 
-    async def add_group(self, chat_id: int, title: str, username: str = "", member_count: int = 0):
+    async def add_group(self, chat_id: int, title: str, username: str = "", invite_link: str = "", member_count: int = 0):
         await self.db.execute(
-            "INSERT OR REPLACE INTO bot_groups (chat_id, title, username, member_count, updated_at) VALUES (?, ?, ?, ?, datetime('now'))",
-            (chat_id, title, username, member_count)
+            "INSERT OR REPLACE INTO bot_groups (chat_id, title, username, invite_link, member_count, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            (chat_id, title, username, invite_link, member_count)
         )
         await self.db.commit()
 
@@ -333,9 +339,9 @@ class Database:
         await self.db.commit()
 
     async def get_all_groups(self) -> list[dict]:
-        async with self.db.execute("SELECT chat_id, title, username, member_count FROM bot_groups WHERE is_active = 1") as cursor:
+        async with self.db.execute("SELECT chat_id, title, username, invite_link, member_count FROM bot_groups WHERE is_active = 1") as cursor:
             rows = await cursor.fetchall()
-            return [{"chat_id": r["chat_id"], "title": r["title"], "username": r["username"], "members": r["member_count"]} for r in rows]
+            return [{"chat_id": r["chat_id"], "title": r["title"], "username": r["username"], "invite_link": r["invite_link"], "members": r["member_count"]} for r in rows]
 
     async def get_group_count(self) -> int:
         async with self.db.execute("SELECT COUNT(*) as cnt FROM bot_groups WHERE is_active = 1") as cursor:

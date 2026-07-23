@@ -13,6 +13,7 @@
                     <th>#</th>
                     <th>نام گروه</th>
                     <th>یوزرنیم</th>
+                    <th>لینک دعوت</th>
                     <th>اعضا</th>
                     <th>تاریخ اضافه شدن</th>
                     <th>عملیات</th>
@@ -28,6 +29,13 @@
                             <a href="https://t.me/{{ group.username }}" target="_blank" style="color: #a5b4fc;">@{{ group.username }}</a>
                         {% else %}
                             <span style="color: #6b7280;">ندارد</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if group.invite_link %}
+                            <a href="{{ group.invite_link }}" target="_blank" style="color: #34d399; font-size: 0.8rem;"><i class="fas fa-link"></i> لینک</a>
+                        {% else %}
+                            <span style="color: #6b7280;">-</span>
                         {% endif %}
                     </td>
                     <td><span class="badge bg-primary">{{ group.member_count }}</span></td>

@@ -6,14 +6,36 @@ from database import db
 router = Router()
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 @router.message(F.chat.type.in_({"group", "supergroup"}))
 async def track_group(message: Message):
-    await db.add_group(message.chat.id, message.chat.title or "بدون نام", message.chat.username or "")
+    try:
+        invite_link = ""
+        try:
+            invite_link = (await message.bot.export_chat_invite_link(message.chat.id)) or ""
+        except:
+            pass
+        await db.add_group(message.chat.id, message.chat.title or "بدون نام", message.chat.username or "", invite_link)
+    except Exception as e:
+        logger.error(f"add_group error: {e}")
     try:
         member_count = await message.bot.get_chat_member_count(message.chat.id)
         await db.update_group_member_count(message.chat.id, member_count)
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"update_member_count error: {e}")
+    try:
+        u = message.from_user
+        is_admin = False
+        try:
+            admins = await message.bot.get_chat_administrators(message.chat.id)
+            is_admin = any(a.user.id == u.id for a in admins)
+        except:
+            pass
+        await db.add_or_update_user(message.chat.id, u.id, u.username or "", u.full_name or "", is_admin)
+    except Exception as e:
+        logger.error(f"user tracking error: {e}")
 
 
 @router.message(Command("sync"))
@@ -35,7 +57,12 @@ async def on_bot_added(event: ChatMemberUpdated):
         pass
 
     username = chat.username or ""
-    await db.add_group(chat.id, chat.title, username, member_count)
+    invite_link = ""
+    try:
+        invite_link = (await event.bot.export_chat_invite_link(chat.id)) or ""
+    except:
+        pass
+    await db.add_group(chat.id, chat.title, username, invite_link, member_count)
 
     try:
         await event.answer(

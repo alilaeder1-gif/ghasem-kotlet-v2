@@ -9,7 +9,7 @@
 </h2>
 
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="icon" style="background: rgba(99, 102, 241, 0.2); color: #6366f1;">
                 <i class="fas fa-user"></i>
@@ -18,7 +18,7 @@
             <p>کاربر ثبت شده</p>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
                 <i class="fas fa-comments"></i>
@@ -27,7 +27,7 @@
             <p>عضو گروه</p>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
                 <i class="fas fa-terminal"></i>
@@ -36,13 +36,113 @@
             <p>دستور سفارشی</p>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="icon" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">
+                <i class="fas fa-history"></i>
+            </div>
+            <h3>{{ chat_count }}</h3>
+            <p>مکالمه با AI</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> مشخصات گروه
+            </div>
+            <div class="card-body">
+                <table class="table table-custom">
+                    <tr><td><strong>نام گروه:</strong></td><td>{{ group.title }}</td></tr>
+                    <tr><td><strong>یوزرنیم:</strong></td><td>{% if group.username %}<a href="https://t.me/{{ group.username }}" target="_blank" style="color: #a5b4fc;">@{{ group.username }}</a>{% else %}<span style="color: #6b7280;">ندارد</span>{% endif %}</td></tr>
+                    <tr><td><strong>لینک دعوت:</strong></td><td>{% if group.invite_link %}<a href="{{ group.invite_link }}" target="_blank" style="color: #34d399; font-size: 0.8rem;"><i class="fas fa-link"></i> لینک ورود</a>{% else %}<span style="color: #6b7280;">ندارد</span>{% endif %}</td></tr>
+                    <tr><td><strong>آیدی:</strong></td><td style="font-size: 0.8rem;">{{ group.chat_id }}</td></tr>
+                    <tr><td><strong>اعضا:</strong></td><td><span class="badge bg-primary">{{ group.member_count }}</span></td></tr>
+                    <tr><td><strong>اضافه شده:</strong></td><td>{{ group.added_at }}</td></tr>
+                    <tr><td><strong>آخرین بروزرسانی:</strong></td><td>{{ group.updated_at }}</td></tr>
+                    <tr><td><strong>وضعیت:</strong></td><td><span class="badge bg-success">فعال</span></td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-cog"></i> تنظیمات گروه
+            </div>
+            <div class="card-body">
+                {% if settings %}
+                <p><strong>عضویت اجباری:</strong> 
+                    {% if settings.force_sub_enabled %}
+                        <span class="badge bg-success">فعال</span> @{{ settings.force_sub_channel }}
+                    {% else %}
+                        <span class="badge bg-secondary">غیرفعال</span>
+                    {% endif %}
+                </p>
+                <p><strong>خوشامدگویی:</strong> <span class="badge bg-{{ 'success' if settings.welcome_enabled else 'secondary' }}">{{ 'فعال' if settings.welcome_enabled else 'غیرفعال' }}</span></p>
+                <p><strong>محافظت اسپم:</strong> <span class="badge bg-{{ 'success' if settings.spam_protection else 'secondary' }}">{{ 'فعال' if settings.spam_protection else 'غیرفعال' }}</span></p>
+                <p><strong>محافظت flood:</strong> <span class="badge bg-{{ 'success' if settings.flood_protection else 'secondary' }}">{{ 'فعال' if settings.flood_protection else 'غیرفعال' }}</span></p>
+                <p><strong>چت AI:</strong> <span class="badge bg-{{ 'success' if settings.ai_chat_enabled else 'secondary' }}">{{ 'فعال' if settings.ai_chat_enabled else 'غیرفعال' }}</span></p>
+                {% else %}
+                <p style="color: #6b7280;">تنظیمات خاصی اعمال نشده</p>
+                {% endif %}
+
+                <hr style="border-color: rgba(255,255,255,0.1);">
+                <p><strong>عنوان اختصاصی:</strong> {{ settings.custom_title or 'ندارد' if settings else 'ندارد' }}</p>
+            </div>
+        </div>
+
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-brain"></i> شخصیت هوش مصنوعی
+            </div>
+            <div class="card-body">
+                {% if persona %}
+                <p><strong>اسم:</strong> {{ persona.persona_name }}</p>
+                <p><strong>پرامپت:</strong> <small>{{ persona.system_prompt[:100] }}...</small></p>
+                <p><strong>وضعیت:</strong> <span class="badge bg-{{ 'success' if persona.is_enabled else 'secondary' }}">{{ 'فعال' if persona.is_enabled else 'غیرفعال' }}</span></p>
+                {% else %}
+                <p style="color: #6b7280;">شخصیتی تنظیم نشده (پیش‌فرض: کُتلت)</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-custom">
+            <div class="card-header">
+                <i class="fas fa-crown"></i> ادمین‌های گروه ({{ admin_users|length }})
+            </div>
+            <div class="card-body">
+                {% if admin_users %}
+                <table class="table table-custom">
+                    <thead>
+                        <tr><th>نام</th><th>یوزرنیم</th><th>پیام</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for a in admin_users %}
+                        <tr>
+                            <td><i class="fas fa-crown" style="color: #f59e0b;"></i> {{ a.full_name }}</td>
+                            <td>{{ a.username or '-' }}</td>
+                            <td><span class="badge bg-warning">{{ a.message_count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: #6b7280;">ادمینی شناسایی نشده. وقتی کسی پیام بده، چک میکنم.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
     <div class="col-md-6">
         <div class="card-custom">
             <div class="card-header">
-                <i class="fas fa-users"></i> کاربران گروه
+                <i class="fas fa-users"></i> کاربران گروه ({{ users|length }})
             </div>
             <div class="card-body">
                 <table class="table table-custom">
@@ -77,48 +177,6 @@
     <div class="col-md-6">
         <div class="card-custom">
             <div class="card-header">
-                <i class="fas fa-cog"></i> تنظیمات گروه
-            </div>
-            <div class="card-body">
-                {% if settings %}
-                <p><strong>عضویت اجباری:</strong> 
-                    {% if settings.force_sub_enabled %}
-                        <span class="badge bg-success">فعال</span> @{{ settings.force_sub_channel }}
-                    {% else %}
-                        <span class="badge bg-secondary">غیرفعال</span>
-                    {% endif %}
-                </p>
-                <p><strong>خوشامدگویی:</strong> <span class="badge bg-{{ 'success' if settings.welcome_enabled else 'secondary' }}">{{ 'فعال' if settings.welcome_enabled else 'غیرفعال' }}</span></p>
-                <p><strong>محافظت اسپم:</strong> <span class="badge bg-{{ 'success' if settings.spam_protection else 'secondary' }}">{{ 'فعال' if settings.spam_protection else 'غیرفعال' }}</span></p>
-                <p><strong>محافظت flood:</strong> <span class="badge bg-{{ 'success' if settings.flood_protection else 'secondary' }}">{{ 'فعال' if settings.flood_protection else 'غیرفعال' }}</span></p>
-                <p><strong>چت AI:</strong> <span class="badge bg-{{ 'success' if settings.ai_chat_enabled else 'secondary' }}">{{ 'فعال' if settings.ai_chat_enabled else 'غیرفعال' }}</span></p>
-                {% else %}
-                <p style="color: #6b7280;">تنظیمات خاصی اعمال نشده</p>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="card-custom">
-            <div class="card-header">
-                <i class="fas fa-brain"></i> شخصیت هوش مصنوعی
-            </div>
-            <div class="card-body">
-                {% if persona %}
-                <p><strong>اسم:</strong> {{ persona.persona_name }}</p>
-                <p><strong>پرامپت:</strong> <small>{{ persona.system_prompt[:100] }}...</small></p>
-                <p><strong>وضعیت:</strong> <span class="badge bg-{{ 'success' if persona.is_enabled else 'secondary' }}">{{ 'فعال' if persona.is_enabled else 'غیرفعال' }}</span></p>
-                {% else %}
-                <p style="color: #6b7280;">شخصیتی تنظیم نشده</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-6">
-        <div class="card-custom">
-            <div class="card-header">
                 <i class="fas fa-terminal"></i> دستورات سفارشی
             </div>
             <div class="card-body">
@@ -130,8 +188,8 @@
                     <tbody>
                         {% for cmd in commands %}
                         <tr>
-                            <td>/{{ cmd.command }}</td>
-                            <td>{{ cmd.response[:50] }}...</td>
+                            <td><code style="background: rgba(99,102,241,0.2); padding: 2px 8px; border-radius: 5px;">/{{ cmd.command }}</code></td>
+                            <td>{{ cmd.response[:50] }}{% if cmd.response|length > 50 %}...{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -141,8 +199,7 @@
                 {% endif %}
             </div>
         </div>
-    </div>
-    <div class="col-md-6">
+
         <div class="card-custom">
             <div class="card-header">
                 <i class="fas fa-reply"></i> پاسخ‌های خودکار
@@ -156,8 +213,8 @@
                     <tbody>
                         {% for r in replies %}
                         <tr>
-                            <td>{{ r.keyword }}</td>
-                            <td>{{ r.response[:50] }}...</td>
+                            <td><span class="badge bg-info">{{ r.keyword }}</span></td>
+                            <td>{{ r.response[:50] }}{% if r.response|length > 50 %}...{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
