@@ -61,28 +61,40 @@ def get_deepseek():
         return None
 
 
+MODELS = [
+    "llama3-70b-8192",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+]
+
+
 def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = None) -> str:
     client = get_deepseek()
     if not client:
         return "⚠️ خطا: GROQ_API_KEY تنظیم نشده."
-    try:
-        messages = [{"role": "system", "content": system_prompt}]
-        if chat_history:
-            for msg in chat_history[-6:]:
-                role = "user" if msg.get("role") == "user" else "assistant"
-                messages.append({"role": role, "content": msg.get("content", "")})
-        messages.append({"role": "user", "content": user_message})
-        resp = client.chat.completions.create(
-            model="llama3-70b-8192",
-            messages=messages,
-            max_tokens=1024,
-            temperature=1.0,
-            frequency_penalty=1.0,
-            presence_penalty=0.8
-        )
-        return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
-    except Exception as e:
-        return f"⚠️ خطا: {str(e)[:200]}"
+    messages = [{"role": "system", "content": system_prompt}]
+    if chat_history:
+        for msg in chat_history[-6:]:
+            role = "user" if msg.get("role") == "user" else "assistant"
+            messages.append({"role": role, "content": msg.get("content", "")})
+    messages.append({"role": "user", "content": user_message})
+    last_error = ""
+    for model in MODELS:
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=1024,
+                temperature=1.0,
+                frequency_penalty=1.0,
+                presence_penalty=0.8
+            )
+            return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
+        except Exception as e:
+            last_error = str(e)[:200]
+            continue
+    return f"⚠️ خطا: {last_error}"
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
