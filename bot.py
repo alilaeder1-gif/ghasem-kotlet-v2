@@ -157,7 +157,7 @@ async def main():
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 files={"file": ("voice.ogg", file_bytes, "audio/ogg")},
-                data={"model": "whisper-large-v3", "language": "fa", "response_format": "json"},
+                data={"model": "whisper-large-v3", "response_format": "json"},
                 timeout=30
             )
             if resp.status_code != 200:
