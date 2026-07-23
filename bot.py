@@ -16,7 +16,7 @@ from handlers.fun import reminder_worker
 
 
 def normalize_persian(text):
-    text = re.sub(r'(.)\1{2,}', r'\1\1', text)
+    text = re.sub(r'(.)\1{2,}', r'\1', text)
     return text
 
 logging.basicConfig(
