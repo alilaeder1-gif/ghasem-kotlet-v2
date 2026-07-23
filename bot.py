@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message
 from aiogram import F
-from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY
+from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY, GROQ_KEYS
 from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot
@@ -184,9 +184,13 @@ async def main():
             user_msg = ""
             recognizer = sr.Recognizer()
 
-            # اول با Groq Whisper
-            api_key = GROQ_API_KEY
-            if api_key:
+            # اول با Groq Whisper (با چرخش کلیدها)
+            _groq_idx = 0
+            for attempt in range(len(GROQ_KEYS)):
+                api_key = GROQ_KEYS[_groq_idx % len(GROQ_KEYS)]
+                _groq_idx += 1
+                if not api_key:
+                    continue
                 try:
                     with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
                         f.write(file_bytes)
@@ -195,9 +199,14 @@ async def main():
                         audio = recognizer.record(source)
                     user_msg = recognizer.recognize_groq(audio, api_key=api_key)
                     os.unlink(tmp_path)
+                    break
                 except Exception as e:
-                    logger.warning(f"Groq STT failed: {e}")
+                    logger.warning(f"Groq STT attempt {attempt+1} failed: {e}")
                     user_msg = ""
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
 
             # fallback: Google رایگان
             if not user_msg:
