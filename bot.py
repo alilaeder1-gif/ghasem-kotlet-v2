@@ -15,35 +15,17 @@ from handlers.ai_chat import ask_ai, DEFAULT_PROMPT
 from handlers.fun import reminder_worker
 
 
-GREETING_PATTERNS = [
-    re.compile(r'س+ل+ا+م+'),        # سسسلالالالاممم
-    re.compile(r'چ+ط+و+ر+[یي]+'),   # چطوووورییی
-    re.compile(r'چ+ط+و+ر+ی+ن+'),    # چطورین
-    re.compile(r'چ+خ+ب+ر+'),        # چخبر
-    re.compile(r'د+ر+و+د+'),        # درود
-    re.compile(r'ع+ل+ی+ک+'),        # علیک
-    re.compile(r'خ+و+ب+[یي]+'),     # خوبی
-    re.compile(r'خ+و+ب+ی+ن+'),      # خوبین
-    re.compile(r'ح+ا+ل+ت+چ+ط+و+ر+'),# حالت چطور
-    re.compile(r'ح+ا+ل+ت+ش+و+م+ا+'),# حالت شما
-    re.compile(r'چ+ط+و+ر+[هه]+'),   # چطوره
-    re.compile(r'چ+ی+ز+ی+'),        # چیزی
-    re.compile(r'ک+ج+ا+[یي]+'),     # کجایی
-    re.compile(r'چ+ن+د+م+ی+ن+'),    # چندمین
-    re.compile(r'م+ا+ل+ی+'),        # مالی
-    re.compile(r'ت+و+[یي]+'),       # تویی
-    re.compile(r'ی+ه+ر+و+چ+ی+'),    # یهروچی
-    re.compile(r'ج+و+ن+م+'),        # جونم
-    re.compile(r'چ+ی+ز+ی+'),        # چیزی
-]
-
-
 def is_persian_greeting(text):
     clean = re.sub(r'[\s\.\,\?\=\!\-]', '', text)
-    for p in GREETING_PATTERNS:
-        if p.search(clean):
-            return True
-    return False
+    patterns = [
+        r'س+ل+ا*م*', r'س+ل+م+',
+        r'چ+ط+و+ر+',
+        r'د+ر+و+د+',
+        r'ع+ل+ی+ک+',
+        r'خ+و+ب+[یي]',
+        r'چ+خ+ب+ر+',
+    ]
+    return any(re.search(p, clean) for p in patterns)
 
 logging.basicConfig(
     level=logging.INFO,
