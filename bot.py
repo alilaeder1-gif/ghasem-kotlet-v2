@@ -63,6 +63,7 @@ async def main():
     dp.message.middleware(AntiFloodMiddleware())
 
     dp.include_router(admin.router)
+    dp.include_router(misc.router)
     dp.include_router(welcome.router)
     dp.include_router(rules.router)
     dp.include_router(spam.router)
@@ -196,8 +197,6 @@ async def main():
                 await message.reply(f"🎤 {response}")
         except Exception as e:
             await message.reply(f"⚠️ خطا: {str(e)[:100]}")
-
-    dp.include_router(misc.router)
 
     logger.info("ربات شروع به کار کرد!")
     try:
