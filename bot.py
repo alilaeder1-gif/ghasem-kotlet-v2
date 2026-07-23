@@ -81,14 +81,18 @@ async def main():
             )
             user_msg_lower = user_msg.lower()
             norm_msg = normalize_persian(user_msg_lower)
-            is_name_called = any(k in norm_msg for k in ["کتلت", "کتی", "kotlet", "قاسم", "سلام", "چطوری", "چطورین", "چطوریین"])
-            if is_name_called and message.reply_to_message:
+            is_name_called = any(k in norm_msg for k in ["کتلت", "کتی", "kotlet", "قاسم"])
+            greeting_words = ["سلام", "درود", "علیک", "چطوری", "چطورین", "چطوریین", "خوبی", "خوبین", "چه خبر", "حالت چطور"]
+            is_greeting = any(k in norm_msg for k in greeting_words)
+            if is_greeting and message.reply_to_message:
                 is_reply_to_bot = (
                     message.reply_to_message.from_user
                     and message.reply_to_message.from_user.id == bot_info.id
                 )
-                if not is_reply_to_bot and any(k in norm_msg for k in ["سلام", "چطوری", "چطورین", "چطوریین"]):
-                    is_name_called = False
+                if not is_reply_to_bot:
+                    is_greeting = False
+            if not is_mention and not is_reply and not is_name_called and not is_greeting:
+                return
             if not is_mention and not is_reply and not is_name_called:
                 return
             if is_mention:
