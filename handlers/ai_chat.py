@@ -85,10 +85,16 @@ MODELS = [
 ]
 
 OPENROUTER_MODELS = [
-    "qwen/qwen-2.5-72b-instruct",
+    "qwen/qwen-2.5-coder-32b-instruct",
     "deepseek/deepseek-chat",
     "nousresearch/hermes-3-llama-3.1-405b",
     "google/gemma-2-27b-it",
+]
+
+CODE_MODELS = [
+    "qwen/qwen-2.5-coder-32b-instruct",
+    "deepseek/deepseek-coder",
+    "cognitivecomputations/dolphin-2.9.3-qwen2-72b",
 ]
 
 
@@ -246,6 +252,34 @@ async def generate_image(prompt: str) -> str:
     import httpx
     url = f"https://image.pollinations.ai/prompt/{prompt}?width=1024&height=1024&nologo=true"
     return url
+
+
+CODE_SYSTEM = (
+    "تو یه برنامه‌نویس حرفه‌ای و کمک‌حال کدنویسی هستی. "
+    "به سوالات برنامه‌نویسی پاسخ کامل و دقیق بده. "
+    "کد رو با توضیح بفرست. "
+    "زبان پاسخ فارسی باشه ولی کد به انگلیسی."
+)
+
+
+async def ask_code(user_message: str, chat_history: list = None) -> str:
+    prompt = CODE_SYSTEM
+    response = await ask_ai(user_message, prompt, chat_history)
+    if response.startswith("⚠"):
+        # Fallback: try code models via OpenRouter
+        or_client = _get_openrouter()
+        if or_client:
+            messages = [{"role": "system", "content": CODE_SYSTEM}]
+            if chat_history:
+                for msg in chat_history[-4:]:
+                    role = "user" if msg.get("role") == "user" else "assistant"
+                    messages.append({"role": role, "content": msg.get("content", "")})
+            messages.append({"role": "user", "content": user_message})
+            for model in CODE_MODELS:
+                result = _call_groq(or_client, model, messages)
+                if result is not None:
+                    return result
+    return response
 
 
 MEMORY_EXTRACT_PROMPT = (

@@ -3,6 +3,7 @@ from aiogram.types import Message
 from aiogram.filters import Command
 from database import db
 from config import ADMIN_IDS
+from handlers.ai_chat import ask_code
 
 router = Router()
 
@@ -101,3 +102,13 @@ async def cmd_draw(message: Message):
         await message.reply_photo(photo=url, caption=f"🎨 {prompt}")
     except:
         await message.reply(url)
+
+
+@router.message(Command("code"))
+async def cmd_code(message: Message):
+    prompt = message.text.replace("/code", "").replace("/code@kotletaiBot", "").strip()
+    if not prompt:
+        return await message.reply("مثال: /code یک فانکشن فیبوناچی به پایتون بنویس")
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    response = await ask_code(prompt)
+    await message.reply(response[:4000])
