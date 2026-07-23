@@ -157,7 +157,7 @@ async def main():
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 files={"file": ("voice.ogg", file_bytes, "audio/ogg")},
-                data={"model": "whisper-large-v3", "language": "fa"},
+                data={"model": "whisper-large-v3", "language": "fa", "response_format": "json"},
                 timeout=30
             )
             if resp.status_code != 200:
@@ -176,7 +176,14 @@ async def main():
             if persona and not persona["enabled"]:
                 return
             system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
-            response = await ask_ai(user_msg, system_prompt)
+
+            history = []
+            try:
+                history = await db.get_chat_history(message.chat.id, limit=4)
+            except:
+                pass
+
+            response = await ask_ai(user_msg, system_prompt, history)
             if response.startswith("⚠") or response.startswith("⏳"):
                 await message.reply(response)
             else:
