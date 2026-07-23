@@ -18,7 +18,7 @@ async def set_custom_command(message: Message):
         return await message.reply(
             "مثال:\n"
             "/setcmd سلام درود بر تو! چطور می‌تونم کمکت کنم؟\n\n"
-            "现在 وقتی کسی /سلام بزنه، جواب داده میشه."
+            "حالا وقتی کسی /سلام بزنه، جواب داده میشه."
         )
 
     command = args[0].lstrip("/").strip()
@@ -71,7 +71,7 @@ async def set_auto_reply(message: Message):
         return await message.reply(
             "مثال:\n"
             "/setreply سلام خوش اومدی!\n\n"
-            "现在 وقتی کسی کلمه «سلام» رو بنویسه، خودکار جواب داده میشه."
+            "حالا وقتی کسی کلمه «سلام» رو بنویسه، خودکار جواب داده میشه."
         )
 
     keyword = args[0].strip()

@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import DATABASE_PATH
 
 CANDIDATE_PATHS = [
+    '/data/bot_data.db',
     DATABASE_PATH,
     '/app/bot_data.db',
     '/tmp/bot_data.db',
@@ -134,6 +135,14 @@ def init_database():
             key TEXT PRIMARY KEY,
             value TEXT
         );
+        CREATE TABLE IF NOT EXISTS user_memory (
+            user_id INTEGER,
+            chat_id INTEGER,
+            memory TEXT DEFAULT '',
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, chat_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_history_chat_ts ON chat_history(chat_id, timestamp);
     """)
     conn.commit()
     conn.close()

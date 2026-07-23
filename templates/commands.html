@@ -23,7 +23,7 @@
                     <td>{{ loop.index }}</td>
                     <td><code style="background: rgba(99,102,241,0.2); padding: 2px 8px; border-radius: 5px;">/{{ cmd.command }}</code></td>
                     <td>{{ cmd.response[:60] }}{% if cmd.response|length > 60 %}...{% endif %}</td>
-                    <td style="font-size: 0.8rem;">{{ cmd.group_title[:25] }}...</td>
+                    <td style="font-size: 0.8rem;">{{ cmd.title[:25] }}{% if cmd.title|length > 25 %}...{% endif %}</td>
                     <td>{{ cmd.created_at }}</td>
                 </tr>
                 {% endfor %}

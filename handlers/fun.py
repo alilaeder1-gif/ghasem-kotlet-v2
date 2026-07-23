@@ -3,7 +3,7 @@ import random
 import logging
 from datetime import datetime, timedelta
 from aiogram import Router, F
-from aiogram.types import Message, ChatPermissions
+from aiogram.types import Message
 from aiogram.filters import Command
 from database import db
 

@@ -44,6 +44,8 @@ class Database:
             self.resolved_path = '/tmp/bot_data.db'
         self.db = await aiosqlite.connect(self.resolved_path)
         self.db.row_factory = aiosqlite.Row
+        await self.db.execute("PRAGMA journal_mode=WAL")
+        await self.db.execute("PRAGMA busy_timeout=5000")
         await self._create_tables()
 
     async def close(self):

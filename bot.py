@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message
 from aiogram import F
-from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
+from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY
 from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun
@@ -161,7 +161,7 @@ async def main():
             if isinstance(file_bytes, io.BytesIO):
                 file_bytes = file_bytes.getvalue()
 
-            api_key = os.getenv("GROQ_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+            api_key = GROQ_API_KEY
             if not api_key:
                 return await message.reply("⚠️ خطا: API key تنظیم نشده.")
 

@@ -2,7 +2,6 @@ import os
 import sys
 import sqlite3
 import hashlib
-import json
 import random
 import requests
 from functools import wraps
@@ -58,10 +57,14 @@ def get_db():
             continue
     if not found:
         db_path = '/tmp/bot_data.db'
-        conn = sqlite3.connect(db_path)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute('CREATE TABLE IF NOT EXISTS panel_config (key TEXT PRIMARY KEY, value TEXT)')
+    conn.execute('''CREATE TABLE IF NOT EXISTS user_memory (
+        user_id INTEGER, chat_id INTEGER, memory TEXT DEFAULT '',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, chat_id)
+    )''')
     conn.commit()
     return conn
 
@@ -424,7 +427,6 @@ def broadcast():
     if request.method == 'POST':
         msg = request.form.get('message', '').strip()
         if msg:
-            import requests
             groups = conn.execute('SELECT chat_id, title FROM bot_groups WHERE is_active=1').fetchall()
             ok, fail = 0, 0
             for g in groups:

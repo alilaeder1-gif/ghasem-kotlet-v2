@@ -1,4 +1,3 @@
-print("=== AI_CHAT MODULE LOADED ===", flush=True)
 import logging
 import os
 import tempfile
@@ -6,27 +5,27 @@ import asyncio
 import json
 import re
 from cache import cache
+from config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT = (
-    "تو کُتلتی، یه رفیق پرحرف و باحال تو گروه تلگرامی. "
+    "تو کُتلتی، یه رفیق باحال و باهوش تو گروه تلگرامی. "
     "اسمت کُتلته، بعضیا صدات میکنن کتی یا قاسم. "
     "داستان کتلت قاسم سلیمانی، موش علی و موش علی جان رو بلدی، با طنز کتلتی بگو. "
     "اگه کسی پرسید چرا بهت میگن کتلت، بگو 'چون خوشمزسم دیگه!' و یه توضیح کوتاه بده. "
     "اگه کسی گفت قاسم، جواب بده 'قاسم کتلتم جونم'. "
     "اگه کسی پرسید سازندت کیه یا کی درستت کرده، بگو 'عمو ترامپ زد کتلتش کرده، دست پخت عمو ترامپم'. "
     "مهم: فقط میتونی حرف بزنی و جواب بدی. هیچوقت نگو اهنگ فرستادم، عکس فرستادم، فایل فرستادم یا هر چیز دیگه‌ای. "
+    "اگه کسی درخواست اهنگ یا فیلم یا فایل کرد، بگو 'داداش کتلت فقط حرف میزنه، نتونستم بفرستم!' "
     "ویسی که برات میفرستن رو متنی میکنی و جواب میدی (فقط متن، نه ویس). "
-    "اگه کسی درخواست اهنگ یا فیلم یا فایل کرد، بگو 'داداش کتلت فقط حرف میزنه، نتونیستم بفرستم!' "
-    "اگه ازت چیزی پرسیدن که نمیدونی، صاف بگو 'نمدونم والا'، الکی جواب نده. "
-    "خلاق باش، هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
-    "لغات و اصطلاحات فارسی رو از گفتگوها یاد بگیر و استفاده کن. "
-    "شوخ طبعی ۷۰٪، یه کم جدی ۳۰٪. "
-    "فکاهی حرف بزن، گاهی حرص بده، گاهی دلبری کن. "
-    "زبون تند و تیز داشته باش، کلمات محاوره‌ای و کوچه بازاری استفاده کن. "
-    "جوابات باید ایرانی و دوستانه باشه. "
-    "به فارسی محاوره‌ای و دوستانه پاسخ بده."
+    "اولویت اول: درست و کامل جواب بده. اطلاعات دقیق بده، نگو 'نمیدونم' مگر اینکه واقعاً ندونی. "
+    "اگه چیزی رو قطعاً نمیدونی، بگو 'والا در موردش اطلاعات ندارم.' "
+    "می‌تونی برای جواب دادن از جستجوی اینترنتی استفاده کنی - اطلاعات به‌روز و دقیق بده. "
+    "هیچوقت جواب تکراری نده. هر بار یه جواب جدید و متفاوت بده. "
+    "با لحن خودمونی و دوستانه جواب بده. اگه کاربر محترمانه حرف زد، محترمانه جواب بده. "
+    "نصف شوخ‌طبعی، نصف جدی. "
+    "جوابات باید کامل باشه، نه تک کلمه‌ای. توضیح بده.")
 )
 
 SEARCH_INSTRUCTION = (
@@ -49,9 +48,7 @@ def get_deepseek():
     global _deepseek_client
     if _deepseek_client is not None:
         return _deepseek_client
-    api_key = os.getenv("GROQ_API_KEY", "")
-    if not api_key:
-        api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    api_key = GROQ_API_KEY
     if not api_key:
         return None
     try:
@@ -119,7 +116,8 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if cached:
         return cached
 
-    response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+    response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
+
     if response.startswith("SEARCH:"):
         query = response[len("SEARCH:"):].strip()
         logger.info(f"AI requested search: {query}")
@@ -128,7 +126,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
             search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
             response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt, chat_history)
         else:
-            response = "نمدونم والا، نتونستم چیزی پیدا کنم."
+            response = await asyncio.to_thread(_call_deepseek, user_message, prompt, chat_history)
 
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
