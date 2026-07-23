@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 from cache import cache
-from config import GROQ_API_KEY
+from config import GROQ_API_KEY, OPENROUTER_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +63,47 @@ def get_deepseek():
 
 MODELS = [
     "llama3-70b-8192",
-    "llama-3.1-8b-instant",
+    "deepseek-r1-distill-llama-70b",
+    "qwen-2.5-32b",
+    "llama-3.3-70b-versatile",
     "mixtral-8x7b-32768",
     "gemma2-9b-it",
+    "llama-3.1-8b-instant",
 ]
+
+OPENROUTER_MODELS = [
+    "qwen/qwen-2.5-72b-instruct",
+    "deepseek/deepseek-chat",
+    "nousresearch/hermes-3-llama-3.1-405b",
+    "google/gemma-2-27b-it",
+]
+
+
+def _get_openrouter_client():
+    key = OPENROUTER_API_KEY
+    if not key:
+        return None
+    try:
+        from openai import OpenAI
+        return OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
+    except:
+        return None
+
+
+def _call_model(client, model: str, messages: list) -> str:
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=1024,
+            temperature=1.0,
+            frequency_penalty=1.0,
+            presence_penalty=0.8
+        )
+        return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
+    except Exception as e:
+        logger.warning(f"Model {model} failed: {str(e)[:100]}")
+        return None
 
 
 def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = None) -> str:
@@ -79,22 +116,17 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
             role = "user" if msg.get("role") == "user" else "assistant"
             messages.append({"role": role, "content": msg.get("content", "")})
     messages.append({"role": "user", "content": user_message})
-    last_error = ""
     for model in MODELS:
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=1024,
-                temperature=1.0,
-                frequency_penalty=1.0,
-                presence_penalty=0.8
-            )
-            return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
-        except Exception as e:
-            last_error = str(e)[:200]
-            continue
-    return f"⚠️ خطا: {last_error}"
+        result = _call_model(client, model, messages)
+        if result is not None:
+            return result
+    or_client = _get_openrouter_client()
+    if or_client:
+        for model in OPENROUTER_MODELS:
+            result = _call_model(or_client, model, messages)
+            if result is not None:
+                return result
+    return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
