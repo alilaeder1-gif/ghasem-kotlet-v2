@@ -33,7 +33,7 @@ if REDIS_ENABLED:
 
 def get_db():
     db_path = DATABASE_PATH
-    candidates = [db_path, '/app/bot_data.db', '/tmp/bot_data.db', '/app/data/bot_data.db', 'bot_data.db']
+    candidates = ['/tmp/bot_data.db', db_path, '/app/bot_data.db', '/app/data/bot_data.db', 'bot_data.db']
     found = False
     for path in candidates:
         try:
@@ -41,11 +41,15 @@ def get_db():
             if d and not os.path.exists(d):
                 os.makedirs(d, exist_ok=True)
             conn = sqlite3.connect(path)
-            conn.execute('SELECT 1 FROM sqlite_master')
+            conn.execute('SELECT * FROM bot_groups LIMIT 1')
             db_path = path
             found = True
             break
         except:
+            try:
+                conn.close()
+            except:
+                pass
             continue
     if not found:
         db_path = '/tmp/bot_data.db'
