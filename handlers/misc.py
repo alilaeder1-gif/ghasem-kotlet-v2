@@ -47,7 +47,7 @@ async def cmd_start(message: Message):
             "@کُتلت + پیام - چت با هوش مصنوعی"
         )
 
-    await message.reply(
+    await message.answer(
         "سلام جوون! قاسم کتلتم، کتلت آماده! هر فرمانی دارین بفرمایین 😎\n\n"
         "📋 دستورات ادمین:\n"
         "/ban - بن کاربر (ریپلای)\n"
