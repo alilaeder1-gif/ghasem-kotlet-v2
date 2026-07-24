@@ -375,10 +375,15 @@ class Database:
             return [dict(r) for r in await cursor.fetchall()]
 
     async def seed_api_keys_from_env(self):
-        from config import GEMINI_KEYS, GROQ_KEYS, OPENROUTER_KEYS
-        for provider, keys in [("gemini", GEMINI_KEYS), ("groq", GROQ_KEYS), ("openrouter", OPENROUTER_KEYS)]:
+        import os as _os
+        for provider, env_name in [("gemini", "GEMINI_KEYS"), ("groq", "GROQ_KEYS"), ("openrouter", "OPENROUTER_KEYS")]:
             pid = await self.get_provider_id(provider)
             if pid is None: continue
+            raw = _os.getenv(env_name, "")
+            if not raw:
+                single = _os.getenv(provider.upper() + "_API_KEY", "")
+                raw = single
+            keys = [k.strip().strip("\"'") for k in raw.replace("\n", ",").split(",") if k.strip().strip("\"'")]
             async with self.db.execute("SELECT COUNT(*) as cnt FROM api_keys WHERE provider_id = ?", (pid,)) as cursor:
                 row = await cursor.fetchone()
                 if row["cnt"] > 0: continue

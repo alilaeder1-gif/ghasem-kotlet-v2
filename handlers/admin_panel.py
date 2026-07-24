@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from database import db
-from config import ADMIN_IDS, GEMINI_KEYS, GROQ_KEYS, OPENROUTER_KEYS
+from config import ADMIN_IDS
 from handlers.key_pool import all_pools_status, gemini_pool, groq_pool, openrouter_pool, KeyPool
 from handlers.ai_gateway import daily_usage, health_score
 
@@ -230,12 +230,41 @@ async def cb_keys_menu(cq: CallbackQuery):
     lines = ["👑 **مدیریت API Keys**\n"]
     b = InlineKeyboardBuilder()
     for name, pool in pools.items():
-        lines.append(f"\n**{name}** ({len(pool.keys)} کلید):")
-        for k in pool.keys:
-            s = "🟢" if k.is_available() else ("⏳" if k.cooldown_until and time.time() < k.cooldown_until else "🔴")
-            lines.append(f"  {s} `...{k.key[-8:]}` {k.total_calls} calls")
+        status = pool.status()
+        healthy = status["healthy"]
+        cooldown = status["cooldown"]
+        dead = status["dead"]
+        emoji = "🟢" if healthy == status["total"] else ("🟡" if healthy > 0 else "🔴")
+        lines.append(f"{emoji} **{name}**: 🟢 {healthy} سالم | ⏳ {cooldown} cooldown | 💀 {dead} مرده")
+        b.button(text=f"👁 {name}", callback_data=f"apanel_key_detail_{name}")
         b.button(text=f"➕ {name}", callback_data=f"apanel_key_add_{name}")
+        if dead > 0:
+            b.button(text=f"♻️ {name}", callback_data=f"apanel_key_revive_{name}")
     b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(3)
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=b.as_markup())
+
+@router.callback_query(F.data.startswith("apanel_key_detail_"))
+async def cb_key_detail(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    provider = cq.data.split("_")[-1]
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    if not pool: return
+    lines = [f"👑 **{provider}** - {len(pool.keys)} کلید\n"]
+    b = InlineKeyboardBuilder()
+    for idx, k in enumerate(pool.keys):
+        s = "🟢" if k.is_available() else ("⏳" if k.cooldown_until and time.time() < k.cooldown_until else "🔴")
+        health_bar = "🟢" if k.health >= 60 else ("🟡" if k.health >= 30 else "🔴")
+        cooldown_info = ""
+        if k.cooldown_until and time.time() < k.cooldown_until:
+            remaining = int((k.cooldown_until - time.time()) / 60)
+            cooldown_info = f" ⏳{remaining}m"
+        lines.append(f"{s} `...{k.key[-8:]}` {health_bar}%{k.health:.0f} 📞{k.total_calls}{cooldown_info}")
+        b.button(text=f"❌ {idx+1}", callback_data=f"apanel_key_del_{provider}_{idx}")
+        b.button(text=f"🔄 {idx+1}", callback_data=f"apanel_key_test_{provider}_{idx}")
+        b.button(text=f"🔌 {idx+1}", callback_data=f"apanel_key_toggle_{provider}_{idx}")
+    b.button(text=f"➕ Add", callback_data=f"apanel_key_add_{provider}")
+    b.button(text="🔙 برگشت", callback_data="apanel_keys")
     b.adjust(3)
     await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=b.as_markup())
 
@@ -285,6 +314,65 @@ async def cb_key_toggle(cq: CallbackQuery):
             except: pass
         await cq.answer(f"{'🔴 غیرفعال' if not k.healthy else '🟢 فعال'} شد.", show_alert=True)
     await cb_keys_menu(cq)
+
+@router.callback_query(F.data.startswith("apanel_key_revive_"))
+async def cb_key_revive(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    provider = cq.data.split("_")[-1]
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    if not pool: return
+    revived = 0
+    for k in pool.keys:
+        if not k.healthy:
+            k.healthy = True
+            k.failures = 0
+            k.cooldown_until = 0
+            if k.db_id:
+                try:
+                    import asyncio
+                    asyncio.ensure_future(pool._sync_to_db(k))
+                except: pass
+            revived += 1
+    await cq.answer(f"♻️ {revived} کلید revived شد.", show_alert=True)
+    await cb_keys_menu(cq)
+
+@router.callback_query(F.data.startswith("apanel_key_test_"))
+async def cb_key_test(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    parts = cq.data.split("_")
+    provider = parts[3]
+    idx = int(parts[4])
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    if not pool or idx < 0 or idx >= len(pool.keys): return
+    k = pool.keys[idx]
+    await cq.answer("⏳ تست کلید...", show_alert=False)
+    try:
+        import requests as _r
+        headers = {"Authorization": f"Bearer {k.key}", "Content-Type": "application/json"}
+        data = {"model": "gemini-2.0-flash" if provider == "gemini" else ("llama-3.3-70b-versatile" if provider == "groq" else "deepseek/deepseek-chat"), "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+        if provider == "gemini":
+            from google import genai as _genai
+            _client = _genai.Client(api_key=k.key)
+            resp = _client.models.generate_content(model="gemini-2.0-flash", contents="ping")
+            ok = bool(resp.text)
+        else:
+            base = "https://api.groq.com/openai/v1" if provider == "groq" else "https://openrouter.ai/api/v1"
+            r = _r.post(f"{base}/chat/completions", headers=headers, json=data, timeout=10)
+            ok = r.status_code == 200
+        if ok:
+            k.healthy = True
+            k.failures = 0
+            await cq.answer("✅ کلید سالم است.", show_alert=True)
+        else:
+            await cq.answer("❌ کلید کار نمی‌کند.", show_alert=True)
+    except Exception as e:
+        await cq.answer(f"❌ خطا: {str(e)[:50]}", show_alert=True)
+    if k.db_id:
+        try:
+            import asyncio
+            asyncio.ensure_future(pool._sync_to_db(k))
+        except: pass
+    await cb_key_detail(cq)
 
 # ═══════════════════════════════════════════
 # 4. USER MANAGER (Enhanced)

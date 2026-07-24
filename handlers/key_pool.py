@@ -1,8 +1,6 @@
 import time
 import logging
 from datetime import datetime, timezone
-from config import GROQ_KEYS, GEMINI_KEYS, OPENROUTER_KEYS
-
 logger = logging.getLogger(__name__)
 
 _COOLDOWN_429 = 600

@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message
 from aiogram import F
-from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY, GROQ_KEYS
+from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED
 from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
@@ -443,11 +443,9 @@ async def main():
             user_msg = ""
             recognizer = sr.Recognizer()
 
-            # اول با Groq Whisper (با چرخش کلیدها)
-            _groq_idx = 0
-            for attempt in range(len(GROQ_KEYS)):
-                api_key = GROQ_KEYS[_groq_idx % len(GROQ_KEYS)]
-                _groq_idx += 1
+            # اول با Groq Whisper (با چرخش کلیدهای pool)
+            for attempt in range(len(groq_pool.keys)):
+                api_key = groq_pool.get_key()
                 if not api_key:
                     continue
                 try:

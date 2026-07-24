@@ -4,17 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("DEEPSEEK_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-
-# Multiple keys for load balancing (comma-separated)
-def _split_keys(val: str) -> list[str]:
-    return [k.strip().strip("\"'") for k in val.replace("\n", ",").split(",") if k.strip().strip("\"'")]
-
-GROQ_KEYS = _split_keys(os.getenv("GROQ_KEYS", GROQ_API_KEY))
-GEMINI_KEYS = _split_keys(os.getenv("GEMINI_KEYS", GEMINI_API_KEY))
-OPENROUTER_KEYS = _split_keys(os.getenv("OPENROUTER_KEYS", OPENROUTER_API_KEY))
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_data.db")
 

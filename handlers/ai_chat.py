@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 from cache import cache
-from config import GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, GROQ_KEYS, GEMINI_KEYS, OPENROUTER_KEYS
+
 from handlers.key_pool import get_pool, classify_error, gemini_pool, groq_pool, openrouter_pool
 from handlers.token_estimator import best_tier
 
@@ -272,7 +272,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     # Pre-flight: for each model, find best tier and call once
     response = None
     chain = []
-    if GEMINI_KEYS:
+    if gemini_pool.keys:
         chain.append(("gemini", "gemini-2.0-flash"))
     chain.append(("groq", "llama-3.3-70b-versatile"))
     for m in OPENROUTER_MODELS:
@@ -370,7 +370,7 @@ MEMORY_EXTRACT_PROMPT = (
 async def extract_memory(user_message: str, response: str, old_memory: str = "") -> str:
     try:
         prompt_text = MEMORY_EXTRACT_PROMPT.format(message=user_message[:200], response=response[:200], old_memory=old_memory or "هیچ")
-        if GEMINI_KEYS:
+        if gemini_pool.keys:
             extracted = await asyncio.to_thread(_call_google, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
         else:
             extracted = await asyncio.to_thread(_call_deepseek, prompt_text, "تو یه سیستم هستی که حافظه کاربر رو خلاصه میکنی. مختصر و مفید جواب بده.")
