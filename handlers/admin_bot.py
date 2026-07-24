@@ -123,8 +123,12 @@ async def cb_g_show(cq: CallbackQuery):
         return await cq.answer("❌ گروه پیدا نشد", show_alert=True)
     settings = await db.get_group_settings(chat_id)
     ai_status = "✅ فعال" if not settings or settings.get("ai_chat_enabled", True) else "❌ غیرفعال"
+    spam_status = "✅ فعال" if not settings or settings.get("spam_protection", True) else "❌ غیرفعال"
+    flood_status = "✅ فعال" if not settings or settings.get("flood_protection", True) else "❌ غیرفعال"
     b = InlineKeyboardBuilder()
     b.button(text="🔄 تغییر وضعیت AI", callback_data=f"admin_g_gtoggle_{chat_id}")
+    b.button(text=f"🛡 اسپم: {spam_status}", callback_data=f"admin_g_spam_{chat_id}")
+    b.button(text=f"🌊 سیل: {flood_status}", callback_data=f"admin_g_flood_{chat_id}")
     b.button(text="📋 تاریخچه", callback_data=f"admin_g_ghistory_{chat_id}")
     b.button(text="✉️ ارسال پیام", callback_data=f"admin_g_gmsg_{chat_id}")
     b.button(text="🚪 خروج از گروه", callback_data=f"admin_g_gleave_{chat_id}")
@@ -134,7 +138,9 @@ async def cb_g_show(cq: CallbackQuery):
         f"📌 **{g['title']}**\n"
         f"🆔 `{g['chat_id']}`\n"
         f"👥 اعضا: {g['members']}\n"
-        f"🤖 AI: {ai_status}",
+        f"🤖 AI: {ai_status}\n"
+        f"🛡 محافظت اسپم: {spam_status}\n"
+        f"🌊 محافظت سیل: {flood_status}",
         reply_markup=b.as_markup()
     )
 
@@ -156,7 +162,28 @@ async def cb_g_detail_toggle(cq: CallbackQuery):
     await cb_g_show(cq)
 
 
-@router.callback_query(F.data.startswith("admin_g_ghistory_"))
+@router.callback_query(F.data.startswith("admin_g_spam_"))
+async def cb_g_toggle_spam(cq: CallbackQuery):
+    if cq.from_user.id not in ADMIN_IDS:
+        return await cq.answer("❌ دسترسی نداری", show_alert=True)
+    chat_id = int(cq.data.split("_")[-1])
+    settings = await db.get_group_settings(chat_id)
+    current = settings.get("spam_protection", True) if settings else True
+    await db.update_group_settings(chat_id, spam_protection=int(not current))
+    await cq.answer(f"محافظت اسپم {'✅ فعال' if not current else '❌ غیرفعال'} شد.", show_alert=False)
+    await cb_g_show(cq)
+
+
+@router.callback_query(F.data.startswith("admin_g_flood_"))
+async def cb_g_toggle_flood(cq: CallbackQuery):
+    if cq.from_user.id not in ADMIN_IDS:
+        return await cq.answer("❌ دسترسی نداری", show_alert=True)
+    chat_id = int(cq.data.split("_")[-1])
+    settings = await db.get_group_settings(chat_id)
+    current = settings.get("flood_protection", True) if settings else True
+    await db.update_group_settings(chat_id, flood_protection=int(not current))
+    await cq.answer(f"محافظت سیل {'✅ فعال' if not current else '❌ غیرفعال'} شد.", show_alert=False)
+    await cb_g_show(cq)@router.callback_query(F.data.startswith("admin_g_ghistory_"))
 async def cb_g_detail_history(cq: CallbackQuery):
     if cq.from_user.id not in ADMIN_IDS:
         return await cq.answer("❌ دسترسی نداری", show_alert=True)

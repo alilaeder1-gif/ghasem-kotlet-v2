@@ -21,6 +21,10 @@ SPAM_PATTERNS = [
     r"(sig|sign|سایت\s*شرط‌بندی|شرط\s*بندی|پیشبینی\s*فوتبال)",
     r"(سکسی|دختر\s*خوشگل|حرف\s*حساس|چت\s*خصوصی|سایت\s*دوستی)",
     r"(bot\s*father|ساخت\s*ربات|ساخت\s*بات|ساخت\s*ربات\s*تلگرام)",
+    r"(shart\s*bandi|shartbandi|پیشبینی\s*فوتبال|khaneye\s*shart)",
+    r"(sood\s*roozane|sarmaye\s*gozari|daramad\s*melioni|kar\s*dar\s*khone)",
+    r"(free\s*bitcoin|bitcoin\s*free|earning|earn\s*money|work\s*from\s*home)",
+    r"(usdt\s*free|busd|سود\s*usdt|تتر\s*رایگان|تتر\s*هدیه)",
 ]
 
 FLOOD_LIMIT = 5
@@ -164,7 +168,7 @@ async def check_spam(message: Message):
         except Exception:
             pass
 
-    if is_flood(message.from_user.id, message.chat.id):
+    if settings.get("flood_protection", True) and is_flood(message.from_user.id, message.chat.id):
         try:
             await message.delete()
             await db.log_spam(message.chat.id, message.from_user.id, "[flood] " + text[:100])
