@@ -11,8 +11,10 @@ _MAX_FAILURES = 3
 
 
 class KeyStatus:
-    def __init__(self, key: str):
+    def __init__(self, key: str, db_id: int = None, provider: str = ""):
         self.key = key
+        self.db_id = db_id
+        self.provider = provider
         self.healthy = True
         self.failures = 0
         self.cooldown_until = 0
@@ -61,10 +63,52 @@ class KeyStatus:
 
 
 class KeyPool:
-    def __init__(self, name: str, keys: list[str]):
+    def __init__(self, name: str, keys: list[str] = None):
         self.name = name
-        self.keys = [KeyStatus(k) for k in keys if k]
+        self.keys: list[KeyStatus] = [KeyStatus(k, provider=name) for k in (keys or []) if k]
         self._index = 0
+        self._db_ready = False
+
+    async def load_from_db(self):
+        try:
+            from database import db
+            rows = await db.get_healthy_keys(self.name)
+            self.keys = []
+            for r in rows:
+                ks = KeyStatus(r["api_key"], db_id=r["id"], provider=self.name)
+                ks.total_calls = r.get("total_calls", 0)
+                ks.health = r.get("health", 100.0)
+                cooldown = r.get("cooldown_until")
+                if cooldown:
+                    try:
+                        dt = datetime.fromisoformat(cooldown)
+                        ks.cooldown_until = dt.timestamp()
+                    except: pass
+                self.keys.append(ks)
+            self._db_ready = True
+            logger.info(f"{self.name}: loaded {len(self.keys)} keys from DB")
+        except Exception as e:
+            logger.warning(f"{self.name}: DB load failed, using in-memory keys: {e}")
+
+    async def _sync_to_db(self, ks: KeyStatus):
+        if not self._db_ready or not ks.db_id:
+            return
+        try:
+            from database import db
+            cooldown_str = None
+            if ks.cooldown_until:
+                cooldown_str = datetime.fromtimestamp(ks.cooldown_until, tz=timezone.utc).isoformat()
+            await db.update_key_status(
+                ks.db_id,
+                status="healthy" if ks.healthy else "dead",
+                health=max(0, 100 - ks.failures * 20),
+                cooldown_until=cooldown_str,
+                requests_today=ks.total_calls,
+                total_calls=ks.total_calls,
+                last_error=ks.last_error or "",
+            )
+        except Exception as e:
+            logger.debug(f"DB sync error for {self.name}: {e}")
 
     def get_key(self) -> str | None:
         available = [k for k in self.keys if k.is_available()]
@@ -85,13 +129,24 @@ class KeyPool:
         for k in self.keys:
             if k.key == key:
                 k.record_success()
+                import asyncio
+                asyncio.ensure_future(self._sync_to_db(k))
                 break
 
     def record_failure(self, key: str, error_type: str):
         for k in self.keys:
             if k.key == key:
                 k.record_failure(error_type)
+                import asyncio
+                asyncio.ensure_future(self._sync_to_db(k))
                 break
+
+    def add_key(self, api_key: str, db_id: int = None):
+        self.keys.append(KeyStatus(api_key, db_id=db_id, provider=self.name))
+
+    def remove_key(self, index: int):
+        if 0 <= index < len(self.keys):
+            self.keys.pop(index)
 
     def status(self) -> dict:
         return {
@@ -103,10 +158,28 @@ class KeyPool:
             "total_calls": sum(k.total_calls for k in self.keys),
         }
 
+    def get_key_by_index(self, index: int) -> KeyStatus | None:
+        if 0 <= index < len(self.keys):
+            return self.keys[index]
+        return None
 
-gemini_pool = KeyPool("gemini", GEMINI_KEYS)
-groq_pool = KeyPool("groq", GROQ_KEYS)
-openrouter_pool = KeyPool("openrouter", OPENROUTER_KEYS)
+
+gemini_pool = KeyPool("gemini")
+groq_pool = KeyPool("groq")
+openrouter_pool = KeyPool("openrouter")
+
+
+async def init_pools_from_db():
+    for pool in [gemini_pool, groq_pool, openrouter_pool]:
+        await pool.load_from_db()
+    # Fallback: if DB empty, seed from env
+    total = sum(len(p.keys) for p in [gemini_pool, groq_pool, openrouter_pool])
+    if total == 0:
+        logger.info("No keys in DB, seeding from env vars")
+        from database import db
+        await db.seed_api_keys_from_env()
+        for pool in [gemini_pool, groq_pool, openrouter_pool]:
+            await pool.load_from_db()
 
 
 def classify_error(err_str: str) -> str:

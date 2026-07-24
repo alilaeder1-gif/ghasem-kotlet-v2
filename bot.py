@@ -158,6 +158,10 @@ async def main():
     await db.connect()
     logger.info("پایگاه داده متصل شد.")
 
+    # Load API keys from database (fallback to env vars)
+    from handlers.key_pool import init_pools_from_db
+    await init_pools_from_db()
+
     await cache.connect()
     if cache.enabled:
         logger.info("Redis متصل شد.")

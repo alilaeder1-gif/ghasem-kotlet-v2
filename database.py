@@ -289,6 +289,112 @@ class Database:
             );
         """)
         await self.db.commit()
+        await self._migrate_old()
+        await self._init_api_tables()
+
+    async def _init_api_tables(self):
+        await self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS providers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                enabled INTEGER DEFAULT 1,
+                priority INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider_id INTEGER NOT NULL,
+                api_key TEXT NOT NULL,
+                status TEXT DEFAULT 'healthy',
+                health REAL DEFAULT 100.0,
+                cooldown_until DATETIME,
+                requests_today INTEGER DEFAULT 0,
+                total_calls INTEGER DEFAULT 0,
+                last_used DATETIME,
+                last_error TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (provider_id) REFERENCES providers(id)
+            );
+            INSERT OR IGNORE INTO providers (name) VALUES ('gemini');
+            INSERT OR IGNORE INTO providers (name) VALUES ('groq');
+            INSERT OR IGNORE INTO providers (name) VALUES ('openrouter');
+        """)
+        await self.db.commit()
+
+    async def get_provider_id(self, name: str) -> int | None:
+        async with self.db.execute("SELECT id FROM providers WHERE name = ?", (name,)) as cursor:
+            row = await cursor.fetchone()
+            return row["id"] if row else None
+
+    async def add_api_key(self, provider: str, api_key: str):
+        pid = await self.get_provider_id(provider)
+        if pid is None: return
+        await self.db.execute(
+            "INSERT INTO api_keys (provider_id, api_key) VALUES (?, ?)",
+            (pid, api_key)
+        )
+        await self.db.commit()
+
+    async def remove_api_key(self, key_id: int):
+        await self.db.execute("DELETE FROM api_keys WHERE id = ?", (key_id,))
+        await self.db.commit()
+
+    async def update_key_status(self, key_id: int, **kwargs):
+        cols = ", ".join(f"{k} = ?" for k in kwargs)
+        vals = list(kwargs.values()) + [key_id]
+        await self.db.execute(f"UPDATE api_keys SET {cols} WHERE id = ?", vals)
+        await self.db.commit()
+
+    async def get_healthy_keys(self, provider: str) -> list[dict]:
+        pid = await self.get_provider_id(provider)
+        if pid is None: return []
+        async with self.db.execute(
+            "SELECT id, api_key, status, health, cooldown_until, requests_today, total_calls, last_error "
+            "FROM api_keys WHERE provider_id = ? AND status = 'healthy' "
+            "AND (cooldown_until IS NULL OR cooldown_until < datetime('now')) "
+            "ORDER BY health DESC, last_used ASC",
+            (pid,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def get_all_keys(self, provider: str = None) -> list[dict]:
+        if provider:
+            pid = await self.get_provider_id(provider)
+            if pid is None: return []
+            async with self.db.execute(
+                "SELECT id, api_key, status, health, cooldown_until, requests_today, total_calls, last_error, last_used "
+                "FROM api_keys WHERE provider_id = ? ORDER BY health DESC", (pid,)
+            ) as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+        async with self.db.execute(
+            "SELECT ak.id, p.name as provider, ak.api_key, ak.status, ak.health, "
+            "ak.cooldown_until, ak.requests_today, ak.total_calls, ak.last_error "
+            "FROM api_keys ak JOIN providers p ON ak.provider_id = p.id ORDER BY p.name, ak.health DESC"
+        ) as cursor:
+            return [dict(r) for r in await cursor.fetchall()]
+
+    async def seed_api_keys_from_env(self):
+        from config import GEMINI_KEYS, GROQ_KEYS, OPENROUTER_KEYS
+        for provider, keys in [("gemini", GEMINI_KEYS), ("groq", GROQ_KEYS), ("openrouter", OPENROUTER_KEYS)]:
+            pid = await self.get_provider_id(provider)
+            if pid is None: continue
+            async with self.db.execute("SELECT COUNT(*) as cnt FROM api_keys WHERE provider_id = ?", (pid,)) as cursor:
+                row = await cursor.fetchone()
+                if row["cnt"] > 0: continue
+            for key in keys:
+                if key:
+                    await self.db.execute(
+                        "INSERT INTO api_keys (provider_id, api_key) VALUES (?, ?)", (pid, key)
+                    )
+        await self.db.commit()
+
+    async def get_key_count(self) -> int:
+        async with self.db.execute("SELECT COUNT(*) as cnt FROM api_keys") as cursor:
+            row = await cursor.fetchone()
+            return row["cnt"] if row else 0
+
+    async def _migrate_old(self):
         try:
             await self.db.execute("ALTER TABLE bot_groups ADD COLUMN invite_link TEXT DEFAULT ''")
             await self.db.commit()

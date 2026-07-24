@@ -200,9 +200,13 @@ async def cb_key_del(cq: CallbackQuery):
     idx = int(idx)
     pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
     if pool and 0 <= idx < len(pool.keys):
-        removed = pool.keys.pop(idx).key
-        logger.info(f"Admin removed key ...{removed[-4:]} from {provider}")
-        await cq.answer("✅ کلید حذف شد.", show_alert=True)
+        ks = pool.keys[idx]
+        if ks.db_id:
+            try: await db.remove_api_key(ks.db_id)
+            except: pass
+        pool.remove_key(idx)
+        logger.info(f"Admin removed key ...{ks.key[-4:]} from {provider}")
+        await cq.answer("✅ کلید از دیتابیس حذف شد.", show_alert=True)
     else:
         await cq.answer("❌ خطا", show_alert=True)
     await cb_keys_menu(cq)
@@ -221,6 +225,11 @@ async def cb_key_toggle(cq: CallbackQuery):
         else:
             k.cooldown_until = 0
             k.failures = 0
+        if k.db_id:
+            try:
+                import asyncio
+                asyncio.ensure_future(pool._sync_to_db(k))
+            except: pass
         await cq.answer(f"{'🔴 غیرفعال' if not k.healthy else '🟢 فعال'} شد.", show_alert=True)
     await cb_keys_menu(cq)
 
@@ -522,10 +531,13 @@ async def pending_handler(message: Message):
                 provider = action[1]
                 pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
                 if pool:
-                    from handlers.key_pool import KeyStatus
-                    pool.keys.append(KeyStatus(text))
-                    logger.info(f"Admin added key ...{text[-4:]} to {provider}")
-                    return await message.answer(f"✅ کلید به `{provider}` اضافه شد.", reply_markup=_back("apanel_keys"))
+                    try:
+                        await db.add_api_key(provider, text)
+                        logger.info(f"Admin added key ...{text[-4:]} to {provider} (DB)")
+                        await pool.load_from_db()
+                        return await message.answer(f"✅ کلید به `{provider}` اضافه و در دیتابیس ذخیره شد.", reply_markup=_back("apanel_keys"))
+                    except Exception as e:
+                        return await message.answer(f"❌ خطا در ذخیره: {e}", reply_markup=_back())
                 return await message.answer("❌ Provider پیدا نشد.", reply_markup=_back())
 
             elif act_type == "edit_prompt":
