@@ -14,7 +14,7 @@ from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, extract_memory, split_sentences
-from handlers.personality_core import build_persona_prompt, CORE_IDENTITY
+from handlers.personality_core import build_persona_prompt
 from handlers.fun import reminder_worker
 
 
