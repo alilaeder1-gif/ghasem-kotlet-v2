@@ -283,18 +283,18 @@ async def set_link_delete(message: Message):
         )
 
     if args[0].lower() == "off":
-        await db.update_group_settings(message.chat.id, link_delete_enabled=0, link_delete_delay=0)
+        await db.set_group_settings(message.chat.id, link_delete_enabled=0, link_delete_delay=0)
         return await message.reply("❌ حذف خودکار لینک غیرفعال شد.")
 
     if args[0].lower() == "on" or args[0] == "0":
-        await db.update_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=0)
+        await db.set_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=0)
         return await message.reply("✅ حذف فوری لینک فعال شد. همه لینک‌ها حذف میشن.")
 
     try:
         delay = int(args[0])
         if delay < 1:
             delay = 1
-        await db.update_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=delay)
+        await db.set_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=delay)
         await message.reply(f"✅ حذف لینک فعال شد. لینک کاربران جدید تا {delay} دقیقه حذف میشه.")
     except ValueError:
         await message.reply("عدد معتبر وارد کن.")

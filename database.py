@@ -207,6 +207,26 @@ class Database:
             await self.db.commit()
         except:
             pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN spam_config TEXT DEFAULT '{}'")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN flood_config TEXT DEFAULT '{}'")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN link_config TEXT DEFAULT '{}'")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN force_sub_config TEXT DEFAULT '[]'")
+            await self.db.commit()
+        except:
+            pass
 
     async def set_welcome(self, chat_id: int, message: str | None = None, is_enabled: bool = True):
         await self.db.execute(
@@ -440,6 +460,7 @@ class Database:
             return [{"user_id": r["user_id"], "username": r["username"], "full_name": r["full_name"], "groups": r["group_count"], "first_seen": r["first_seen"]} for r in rows]
 
     async def set_group_settings(self, chat_id: int, **kwargs):
+        import json
         current = await self.get_group_settings(chat_id)
         if not current:
             await self.db.execute("INSERT INTO group_settings (chat_id) VALUES (?)", (chat_id,))
@@ -447,6 +468,8 @@ class Database:
         for key, value in kwargs.items():
             if key in ["force_sub_channel", "force_sub_enabled", "welcome_enabled", "spam_protection", "flood_protection", "ai_chat_enabled", "custom_title", "link_delete_enabled", "link_delete_delay", "ai_behavior", "ai_tone", "ai_personality"]:
                 await self.db.execute(f"UPDATE group_settings SET {key} = ? WHERE chat_id = ?", (value, chat_id))
+            elif key in ["spam_config", "flood_config", "link_config", "force_sub_config"]:
+                await self.db.execute(f"UPDATE group_settings SET {key} = ? WHERE chat_id = ?", (json.dumps(value), chat_id))
         await self.db.commit()
 
     async def get_group_settings(self, chat_id: int) -> dict | None:
@@ -458,6 +481,10 @@ class Database:
                 return {
                     "link_delete_enabled": False,
                     "link_delete_delay": 0,
+                    "spam_config": {},
+                    "flood_config": {},
+                    "link_config": {},
+                    "force_sub_config": [],
                     "ai_behavior": "default",
                     "ai_tone": "tehrani",
                     "ai_personality": 3,
@@ -469,9 +496,14 @@ class Database:
                     "ai_chat_enabled": True,
                     "custom_title": ""
                 }
+            import json
             return {
                 "link_delete_enabled": bool(row["link_delete_enabled"]) if "link_delete_enabled" in row.keys() else False,
                 "link_delete_delay": row["link_delete_delay"] if "link_delete_delay" in row.keys() else 0,
+                "spam_config": json.loads(row["spam_config"]) if "spam_config" in row.keys() and row["spam_config"] else {},
+                "flood_config": json.loads(row["flood_config"]) if "flood_config" in row.keys() and row["flood_config"] else {},
+                "link_config": json.loads(row["link_config"]) if "link_config" in row.keys() and row["link_config"] else {},
+                "force_sub_config": json.loads(row["force_sub_config"]) if "force_sub_config" in row.keys() and row["force_sub_config"] else [],
                 "ai_behavior": row["ai_behavior"] if "ai_behavior" in row.keys() else "default",
                 "ai_tone": row["ai_tone"] if "ai_tone" in row.keys() else "tehrani",
                 "ai_personality": row["ai_personality"] if "ai_personality" in row.keys() else 3,

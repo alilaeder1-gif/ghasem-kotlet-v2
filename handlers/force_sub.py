@@ -60,11 +60,11 @@ async def set_force_sub(message: Message):
         )
 
     if args[0].lower() == "off":
-        await db.update_group_settings(message.chat.id, force_sub_enabled=0, force_sub_channel="")
+        await db.set_group_settings(message.chat.id, force_sub_enabled=0, force_sub_channel="")
         return await message.reply("❌ عضویت اجباری غیرفعال شد.")
 
     channel = args[0].lstrip("@")
-    await db.update_group_settings(message.chat.id, force_sub_enabled=1, force_sub_channel=channel)
+    await db.set_group_settings(message.chat.id, force_sub_enabled=1, force_sub_channel=channel)
     await message.reply(
         f"✅ عضویت اجباری فعال شد!\n"
         f"📢 کانال: @{channel}\n\n"

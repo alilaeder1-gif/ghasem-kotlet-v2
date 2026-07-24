@@ -11,10 +11,76 @@ from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY, GROQ_KEYS
 from database import db
 from cache import cache
-from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds
+from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory
 from handlers.fun import reminder_worker
+
+
+_TONE_PROMPTS = {
+    "tehrani": (
+        "با لهجه تهرونی خیابونی حرف بزن. از کلمات استفاده کن: 'داداش', 'بابا', 'جوون', 'دمت گرم', 'حله', 'بیا بابا', 'چقد', 'وایسا', 'آره جون', 'نه بابا'. "
+        "مثل یه رفیق تهرونی قدیمی حرف بزن، پرانرژی و خودمونی. آخر بعضی جملات '😎' بذار."
+    ),
+    "turkish": (
+        "با لحن ترکی آذربایجانی حرف بزن. از کلمات استفاده کن: 'قارداش', 'بالا', 'نە', 'هه‌', 'دئمه', 'گوزل', 'یاخشی', 'بی', 'اوْلماز'. "
+        "مثل یه رفیق تبریزی باحال حرف بزن، گاهی کلمات ترکی رو با فارسی قاطی کن. آخر بعضی جملات '🔥' بذار."
+    ),
+    "kurdish": (
+        "با لحن کردی حرف بزن. از کلمات استفاده کن: 'برات', 'خوشم', 'برم', 'چاکم', 'زۆر', 'باشه', 'ڕاست', 'خوا'. "
+        "مثل یه رفیق کُرد باحال حرف بزن، گاهی کلمات کردی رو با فارسی قاطی کن. آخر بعضی جملات '⚡' بذار."
+    ),
+    "gilaki": (
+        "با لحن گیلکی حرف بزن. از کلمات استفاده کن: 'بابا', 'جوون', 'زاک', 'خوش', 'بازار', 'کولی', 'میرزا'. "
+        "مثل یه رفیق رشتی باحال حرف بزن، گاهی کلمات گیلکی رو با فارسی قاطی کن. آخر بعضی جملات '🌿' بذار."
+    ),
+    "normal": (
+        "با فارسی روان و معمولی حرف بزن. نه خیلی رسمی نه خیلی محاوره. متعادل و همه‌فهم."
+    ),
+}
+
+_BEHAVIOR_PROMPTS = {
+    "default": (
+        "رفتار پیش‌فرض: خودمونی و باحال، مثل یه رفیق گرم."
+    ),
+    "friendly": (
+        "رفتار دوستانه: خیلی گرم و صمیمی باش. با همه مثل دوستای قدیمی رفتار کن. از کلمات محبت‌آمیز استفاده کن."
+    ),
+    "formal": (
+        "رفتار رسمی: با احترام و ادب صحبت کن. از کلمات مؤدبانه استفاده کن. شوخی نکن مگر اینکه کاربر شروع کنه."
+    ),
+    "funny": (
+        "رفتار شوخ: همیشه یه جوک یا شوخی بامزه توی جوابت باشه. سعی کن کاربر رو بخندونی. از میم‌های فارسی استفاده کن."
+    ),
+    "cool": (
+        "رفتار باحال: مثل یه جوون امروزی حرف بزن. از کلمات جدید و ترند استفاده کن. اسلنگ اینترنتی و تلگرامی بلدی."
+    ),
+    "polite": (
+        "رفتار مؤدب: همیشه مؤدب و باادب باش. از کلمات احترام‌آمیز استفاده کن. هیچوقت بی‌ادبی نکن حتی اگه کاربر بی‌ادبی کنه."
+    ),
+    "rude": (
+        "رفتار بی‌ادب: گستاخ و بی‌پروای حرف بزن. از کلمات تند و زننده استفاده کن. کاربر رو دست کم بگیر. مسخره کن و تحقیر کن. هیچ احترامی نذار. "
+        "فحش بده، توهین کن، بگو 'کصخل', 'احمق', 'بی‌سواد', 'بیکاره', 'گوه خوردی'. "
+        "با لحن زننده و توهین‌آمیز جواب بده طوری که کاربر پشیمون بشه پیام داده."
+    ),
+}
+
+_PERSONALITY_PROMPTS = {
+    1: "سطح شخصیت ۱ (رباتی خشک): خیلی مختصر و مفید جواب بده. فقط به سوال مستقیم جواب بده. هیچ شوخی یا حاشیه‌ای نداشته باش.",
+    2: "سطح شخصیت ۲ (معمولی): نسبتاً مختصر جواب بده. کوتاه و مفید. شوخی ملایم می‌تونی بکنی ولی کم.",
+    3: "سطح شخصیت ۳ (خودمونی): معمولی و خودمونی حرف بزن. گرم و صمیمی. شوخی و خنده توی کلامت باشه.",
+    4: "سطح شخصیت ۴ (باحال): پرانرژی و باحال حرف بزن. شوخی زیاد کن. گاهی مسخره‌بازی دربیار. کاربرا باید باهات حال کنن.",
+    5: "سطح شخصیت ۵ (پررو): خیلی پررو و بی‌پروا حرف بزن. شوخی‌های جسورانه کن. گاهی کلمات تند استفاده کن اگه فضا اجازه بده. مرز ادب رو نگه دار ولی نزدیک خط قرمز باش.",
+}
+
+
+def _build_ai_prompt(settings: dict, persona_prompt: str = None) -> str:
+    base = persona_prompt or DEFAULT_PROMPT
+    tone = settings.get("ai_tone", "tehrani")
+    behavior = settings.get("ai_behavior", "default")
+    personality = settings.get("ai_personality", 3)
+    extra = f"\n\n{_TONE_PROMPTS.get(tone, _TONE_PROMPTS['tehrani'])}\n{_BEHAVIOR_PROMPTS.get(behavior, _BEHAVIOR_PROMPTS['default'])}\n{_PERSONALITY_PROMPTS.get(personality, _PERSONALITY_PROMPTS[3])}"
+    return base + extra
 
 
 def is_persian_greeting(text):
@@ -74,6 +140,7 @@ async def main():
     dp.include_router(group_tracker.router)
     dp.include_router(force_sub.router)
     dp.include_router(fun.router)
+    dp.include_router(settings_panel.router)
 
     asyncio.create_task(reminder_worker())
 
@@ -143,7 +210,8 @@ async def main():
                         await message.reply(r["response"])
                         return
 
-        system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
+        settings = await db.get_group_settings(message.chat.id)
+        system_prompt = _build_ai_prompt(settings, persona["prompt"] if persona else None)
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         try:
@@ -236,7 +304,8 @@ async def main():
             persona = await db.get_persona(message.chat.id)
             if persona and not persona["enabled"]:
                 return
-            system_prompt = persona["prompt"] if persona else DEFAULT_PROMPT
+            settings = await db.get_group_settings(message.chat.id)
+            system_prompt = _build_ai_prompt(settings, persona["prompt"] if persona else None)
 
             history = []
             try:
