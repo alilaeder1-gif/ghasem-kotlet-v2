@@ -6,10 +6,9 @@ import json
 import re
 from cache import cache
 from config import GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, GROQ_KEYS, GEMINI_KEYS, OPENROUTER_KEYS
+from handlers.key_pool import get_pool, classify_error, gemini_pool, groq_pool, openrouter_pool
 
 logger = logging.getLogger(__name__)
-
-_key_index = {"groq": 0, "gemini": 0, "openrouter": 0}
 
 _EMOJI_ANGRY = re.compile(r'[😡🤬👿💢]', re.UNICODE)
 _EMOJI_SAD = re.compile(r'[😢😭😔😞🥺💔]', re.UNICODE)
@@ -38,14 +37,9 @@ def detect_emotion(text: str) -> str:
     return "normal"
 
 
-def _next_key(provider: str) -> str:
-    keys = {"groq": GROQ_KEYS, "gemini": GEMINI_KEYS, "openrouter": OPENROUTER_KEYS}
-    lst = keys.get(provider, [])
-    if not lst:
-        return ""
-    idx = _key_index[provider]
-    _key_index[provider] = (idx + 1) % len(lst)
-    return lst[idx]
+def _get_key(provider: str) -> str | None:
+    pool = get_pool(provider)
+    return pool.get_key()
 
 DEFAULT_PROMPT = "شخصیت کتلت (قاسم کتلت)، ۲۵ ساله، رفیق تهرونی. فارسی محاوره‌ای. کنایه و شوخی رو بفهم. کوتاه جواب بده. همیشه یه ایموجی آخرش."
 """
@@ -71,15 +65,15 @@ _groq_client = None
 
 def _get_google():
     global _google_client
-    key = _next_key("gemini")
+    key = _get_key("gemini")
     if not key:
         return None
     try:
         import google.generativeai as genai
         genai.configure(api_key=key)
         model = genai.GenerativeModel("gemini-2.0-flash")
-        _google_client = model
-        return model
+        _google_client = (model, key)
+        return _google_client
     except Exception as e:
         logger.error(f"Gemini init error: {e}")
         return None
@@ -87,13 +81,13 @@ def _get_google():
 
 def _get_groq():
     global _groq_client
-    key = _next_key("groq")
+    key = _get_key("groq")
     if not key:
         return None
     try:
         from openai import OpenAI
         _groq_client = OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
-        return _groq_client
+        return (_groq_client, key)
     except Exception as e:
         logger.error(f"Groq init error: {e}")
         return None
@@ -122,17 +116,17 @@ CODE_MODELS = [
 
 
 def _get_openrouter():
-    key = _next_key("openrouter")
+    key = _get_key("openrouter")
     if not key:
         return None
     try:
         from openai import OpenAI
-        return OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
+        return (OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1"), key)
     except:
         return None
 
 
-def _call_groq(client, model: str, messages: list) -> str:
+def _call_groq(client, model: str, messages: list, pool, key: str = None) -> str:
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -142,36 +136,46 @@ def _call_groq(client, model: str, messages: list) -> str:
             frequency_penalty=1.0,
             presence_penalty=0.8
         )
+        if key:
+            pool.record_success(key)
         return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
     except Exception as e:
         err_str = str(e)
-        logger.warning(f"Groq {model} failed: {err_str[:100]}")
+        logger.warning(f"{pool.name} {model} failed: {err_str[:100]}")
+        err_type = classify_error(err_str)
+        if key:
+            pool.record_failure(key, err_type)
         if any(k in err_str for k in ["413", "Payload Too Large", "402", "context length", "token limit", "tokens limit exceeded"]):
             return "⚠CONTEXT_OVERFLOW"
-        if any(k in err_str for k in ["401", "Invalid API Key", "Unauthorized", "Missing Auth"]):
+        if err_type == "auth_fail":
             return "⚠AUTH_FAIL"
-        if any(k in err_str for k in ["429", "Rate limit", "Too Many Requests"]):
+        if err_type == "rate_limit":
             return "⚠RATE_LIMIT"
         return None
 
 
 def _call_google(user_message: str, system_prompt: str, chat_history: list = None) -> str:
-    model = _get_google()
-    if not model:
+    result = _get_google()
+    if not result:
         return None
+    model, key = result
     try:
         full_prompt = f"{system_prompt}\n\n{user_message}"
         resp = model.generate_content(full_prompt)
+        gemini_pool.record_success(key)
         return resp.text.strip() or "پاسخی دریافت نشد."
     except Exception as e:
-        logger.warning(f"Gemini failed: {str(e)[:100]}")
+        err_str = str(e)[:200]
+        logger.warning(f"Gemini failed: {err_str[:100]}")
+        gemini_pool.record_failure(key, classify_error(err_str))
         return None
 
 
 def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = None) -> str:
-    client = _get_groq()
-    if not client:
+    result = _get_groq()
+    if not result:
         return None
+    client, key = result
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
         for msg in chat_history[-6:]:
@@ -179,13 +183,14 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
             messages.append({"role": role, "content": msg.get("content", "")})
     messages.append({"role": "user", "content": user_message})
     for model in MODELS:
-        result = _call_groq(client, model, messages)
+        result = _call_groq(client, model, messages, groq_pool, key)
         if result is not None and not result.startswith("⚠"):
             return result
-    or_client = _get_openrouter()
-    if or_client:
+    or_result = _get_openrouter()
+    if or_result:
+        or_client, or_key = or_result
         for model in OPENROUTER_MODELS:
-            result = _call_groq(or_client, model, messages)
+            result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
             if result is not None and not result.startswith("⚠"):
                 return result
     return None
@@ -243,8 +248,9 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
 
     # 3) OpenRouter
     if not response:
-        or_client = _get_openrouter()
-        if or_client:
+        or_result = _get_openrouter()
+        if or_result:
+            or_client, or_key = or_result
             messages = [{"role": "system", "content": prompt + SEARCH_INSTRUCTION}]
             if chat_history:
                 for msg in chat_history[-6:]:
@@ -252,7 +258,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                     messages.append({"role": role, "content": msg.get("content", "")})
             messages.append({"role": "user", "content": user_message})
             for model in OPENROUTER_MODELS:
-                result = _call_groq(or_client, model, messages)
+                result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
                 if result is not None:
                     response = result
                     break
@@ -266,8 +272,9 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
             if not response:
                 response = await asyncio.to_thread(_call_deepseek, user_message, fallback_prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
-                or_client = _get_openrouter()
-                if or_client:
+                or_result = _get_openrouter()
+                if or_result:
+                    or_client, or_key = or_result
                     messages = [{"role": "system", "content": fallback_prompt + SEARCH_INSTRUCTION}]
                     if chat_history:
                         for msg in chat_history[-6:]:
@@ -275,7 +282,7 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                             messages.append({"role": role, "content": msg.get("content", "")})
                     messages.append({"role": "user", "content": user_message})
                     for model in OPENROUTER_MODELS:
-                        result = _call_groq(or_client, model, messages)
+                        result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
                         if result is not None and not result.startswith("⚠"):
                             response = result
                             break
@@ -288,15 +295,13 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
         search_results = await web_search(query)
         if search_results:
             search_context = SEARCH_PROMPT_TEMPLATE.format(query=query, results=search_results)
-            if GEMINI_KEYS:
-                response = await asyncio.to_thread(_call_google, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
+            response = await asyncio.to_thread(_call_google, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
                 response = await asyncio.to_thread(_call_deepseek, user_message + f"\n\n{search_context}", prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
                 response = "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
         else:
-            if GEMINI_KEYS:
-                response = await asyncio.to_thread(_call_google, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+            response = await asyncio.to_thread(_call_google, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
                 response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
@@ -333,9 +338,9 @@ async def ask_code(user_message: str, chat_history: list = None) -> str:
     prompt = CODE_SYSTEM
     response = await ask_ai(user_message, prompt, chat_history)
     if response.startswith("⚠"):
-        # Fallback: try code models via OpenRouter
-        or_client = _get_openrouter()
-        if or_client:
+        or_result = _get_openrouter()
+        if or_result:
+            or_client, or_key = or_result
             messages = [{"role": "system", "content": CODE_SYSTEM}]
             if chat_history:
                 for msg in chat_history[-4:]:
@@ -343,7 +348,7 @@ async def ask_code(user_message: str, chat_history: list = None) -> str:
                     messages.append({"role": role, "content": msg.get("content", "")})
             messages.append({"role": "user", "content": user_message})
             for model in CODE_MODELS:
-                result = _call_groq(or_client, model, messages)
+                result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
                 if result is not None:
                     return result
     return response

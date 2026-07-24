@@ -59,9 +59,10 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
                 response = await asyncio.to_thread(_call_google, user_msg, system_prompt, history)
             elif provider == "groq":
                 from handlers.ai_chat import _get_groq
-                client = _get_groq()
-                if not client:
+                gr = _get_groq()
+                if not gr:
                     continue
+                client, key = gr
                 messages = [{"role": "system", "content": system_prompt}]
                 if history:
                     for msg in history[-6:]:
@@ -69,11 +70,13 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
                         messages.append({"role": role, "content": msg.get("content", "")})
                 messages.append({"role": "user", "content": user_msg})
                 from handlers.ai_chat import _call_groq
-                response = _call_groq(client, model, messages)
+                from handlers.key_pool import groq_pool
+                response = _call_groq(client, model, messages, groq_pool, key)
             elif provider == "openrouter":
-                client = _get_openrouter()
-                if not client:
+                or_r = _get_openrouter()
+                if not or_r:
                     continue
+                client, key = or_r
                 messages = [{"role": "system", "content": system_prompt}]
                 if history:
                     for msg in history[-6:]:
@@ -81,7 +84,8 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
                         messages.append({"role": role, "content": msg.get("content", "")})
                 messages.append({"role": "user", "content": user_msg})
                 from handlers.ai_chat import _call_groq
-                response = _call_groq(client, model, messages)
+                from handlers.key_pool import openrouter_pool
+                response = _call_groq(client, model, messages, openrouter_pool, key)
             else:
                 continue
             if not response or response.startswith(("⚠", "⏳")):
