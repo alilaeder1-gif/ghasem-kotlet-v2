@@ -121,14 +121,15 @@ _AI_TONE_DESC = {
 }
 
 _SLIDER_NAMES = {
+    "friendliness": ("🤗 دوستانه", 0, 10),
     "humor_level": ("😂 طنز", 0, 10),
     "sarcasm_level": ("🙃 کنایه", 0, 10),
-    "friendliness": ("🤗 دوستانه", 0, 10),
-    "formality": ("🎩 رسمی", 0, 10),
-    "empathy": ("💚 همدلی", 0, 10),
     "confidence": ("💪 اعتمادبه‌نفس", 0, 10),
-    "creativity": ("🎨 خلاقیت", 0, 10),
-    "assertiveness": ("⚡ قاطعیت", 0, 10),
+    "empathy": ("💚 همدلی", 0, 10),
+    "tehran_accent": ("🏙️ لهجه تهرانی", 0, 10),
+    "street_language": ("🚶 کوچه‌بازاری", 0, 10),
+    "energy": ("⚡ انرژی", 0, 10),
+    "patience": ("🧘 صبر", 0, 10),
 }
 
 async def show_ai_personality(msg_or_cq, chat_id):

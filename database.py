@@ -184,14 +184,15 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS personality_sliders (
                 chat_id INTEGER PRIMARY KEY,
-                humor_level INTEGER DEFAULT 5,
-                sarcasm_level INTEGER DEFAULT 4,
-                friendliness INTEGER DEFAULT 7,
-                formality INTEGER DEFAULT 2,
-                empathy INTEGER DEFAULT 6,
-                confidence INTEGER DEFAULT 7,
-                creativity INTEGER DEFAULT 6,
-                assertiveness INTEGER DEFAULT 5
+                friendliness INTEGER DEFAULT 9,
+                humor_level INTEGER DEFAULT 9,
+                sarcasm_level INTEGER DEFAULT 6,
+                confidence INTEGER DEFAULT 9,
+                empathy INTEGER DEFAULT 8,
+                tehran_accent INTEGER DEFAULT 9,
+                street_language INTEGER DEFAULT 8,
+                energy INTEGER DEFAULT 9,
+                patience INTEGER DEFAULT 6
             );
 
             CREATE TABLE IF NOT EXISTS user_memory (
@@ -619,27 +620,17 @@ class Database:
             "SELECT * FROM personality_sliders WHERE chat_id = ?", (chat_id,)
         ) as cursor:
             row = await cursor.fetchone()
-            if row:
-                return {
-                    "humor_level": row["humor_level"],
-                    "sarcasm_level": row["sarcasm_level"],
-                    "friendliness": row["friendliness"],
-                    "formality": row["formality"],
-                    "empathy": row["empathy"],
-                    "confidence": row["confidence"],
-                    "creativity": row["creativity"],
-                    "assertiveness": row["assertiveness"],
-                }
-            return {
-                "humor_level": 5,
-                "sarcasm_level": 4,
-                "friendliness": 7,
-                "formality": 2,
-                "empathy": 6,
-                "confidence": 7,
-                "creativity": 6,
-                "assertiveness": 5,
+            default = {
+                "friendliness": 9, "humor_level": 9, "sarcasm_level": 6,
+                "confidence": 9, "empathy": 8, "tehran_accent": 9,
+                "street_language": 8, "energy": 9, "patience": 6,
             }
+            if row:
+                result = {}
+                for k in default:
+                    result[k] = row[k] if k in row.keys() else default[k]
+                return result
+            return dict(default)
 
     async def set_personality_slider(self, chat_id: int, slider: str, value: int):
         await self.db.execute(
