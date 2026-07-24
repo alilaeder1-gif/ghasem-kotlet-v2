@@ -195,7 +195,6 @@ async def main():
             response = await ask_ai(user_msg, system_prompt, history, user_memory, qa_context)
 
         if response.startswith("⚠") or response.startswith("⏳"):
-            await message.reply(response)
             return
 
         if len(response) > 70:
@@ -291,7 +290,7 @@ async def main():
             qa_context = await db.search_similar_qa(message.chat.id, user_msg)
             response = await ask_ai(user_msg, system_prompt, history, qa_context=qa_context)
             if response.startswith("⚠") or response.startswith("⏳"):
-                await message.reply(response)
+                return
             else:
                 if len(response) > 70:
                     response = response[:67] + "..."
