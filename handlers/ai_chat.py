@@ -102,7 +102,6 @@ def _get_groq():
 MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
-    "llama3-8b-8192",
 ]
 
 OPENROUTER_MODELS = [
@@ -145,7 +144,14 @@ def _call_groq(client, model: str, messages: list) -> str:
         )
         return resp.choices[0].message.content.strip() or "پاسخی دریافت نشد."
     except Exception as e:
-        logger.warning(f"Groq {model} failed: {str(e)[:100]}")
+        err_str = str(e)
+        logger.warning(f"Groq {model} failed: {err_str[:100]}")
+        if any(k in err_str for k in ["413", "Payload Too Large", "402", "context length", "token limit", "tokens limit exceeded"]):
+            return "⚠CONTEXT_OVERFLOW"
+        if any(k in err_str for k in ["401", "Invalid API Key", "Unauthorized", "Missing Auth"]):
+            return "⚠AUTH_FAIL"
+        if any(k in err_str for k in ["429", "Rate limit", "Too Many Requests"]):
+            return "⚠RATE_LIMIT"
         return None
 
 
@@ -174,13 +180,13 @@ def _call_deepseek(user_message: str, system_prompt: str, chat_history: list = N
     messages.append({"role": "user", "content": user_message})
     for model in MODELS:
         result = _call_groq(client, model, messages)
-        if result is not None:
+        if result is not None and not result.startswith("⚠"):
             return result
     or_client = _get_openrouter()
     if or_client:
         for model in OPENROUTER_MODELS:
             result = _call_groq(or_client, model, messages)
-            if result is not None:
+            if result is not None and not result.startswith("⚠"):
                 return result
     return None
 
@@ -210,7 +216,7 @@ async def web_search(query: str, max_results: int = 5) -> str:
         return ""
 
 
-async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None, user_memory: str = "", qa_context: list = None) -> str:
+async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None, user_memory: str = "", qa_context: list = None, fallback_prompt: str = None) -> str:
     prompt = system_prompt or DEFAULT_PROMPT
     if qa_context:
         ctx = "\n".join([f"Q: {p['question']}\nA: {p['answer']}" for p in qa_context[-3:]])
@@ -252,7 +258,29 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                     break
 
     if not response:
-        return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
+        # Fallback: retry with smaller prompt if context overflow
+        if fallback_prompt and fallback_prompt != prompt:
+            logger.info("All models failed — retrying with lite prompt")
+            if GEMINI_KEYS:
+                response = await asyncio.to_thread(_call_google, user_message, fallback_prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                response = await asyncio.to_thread(_call_deepseek, user_message, fallback_prompt + SEARCH_INSTRUCTION, chat_history)
+            if not response:
+                or_client = _get_openrouter()
+                if or_client:
+                    messages = [{"role": "system", "content": fallback_prompt + SEARCH_INSTRUCTION}]
+                    if chat_history:
+                        for msg in chat_history[-6:]:
+                            role = "user" if msg.get("role") == "user" else "assistant"
+                            messages.append({"role": role, "content": msg.get("content", "")})
+                    messages.append({"role": "user", "content": user_message})
+                    for model in OPENROUTER_MODELS:
+                        result = _call_groq(or_client, model, messages)
+                        if result is not None and not result.startswith("⚠"):
+                            response = result
+                            break
+        if not response:
+            return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
     if response.startswith("SEARCH:"):
         query = response[len("SEARCH:"):].strip()

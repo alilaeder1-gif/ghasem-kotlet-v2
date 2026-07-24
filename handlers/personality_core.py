@@ -178,6 +178,22 @@ def _resolve(name: str):
     return globals().get(name, "")
 
 
+_LITE_MODULES = [
+    "PERSONA_HEADER", "EMOTIONS", "BEHAVIOR", "SLANG",
+    "CONFIDENCE", "HUMAN_IMPERFECTION", "ANTI_CRINGE",
+    "PERSONALITY_BLEND", "QUALITY_GATE", "PERSONA_SIGNATURE",
+]
+
+
+def build_lite_prompt() -> str:
+    parts = [_resolve(m) for m in _LITE_MODULES if _resolve(m)]
+    parts.append(
+        "## قانون نهايي\n"
+        "هميشه كوتاه جواب بده. حداكثر ۱-۲ جمله. از اموجي كم و هوشمندانه استفاده كن."
+    )
+    return "\n\n".join(parts)
+
+
 def build_core_prompt() -> str:
     parts = [_resolve(m) for m in _CORE_MODULES if _resolve(m)]
     return "\n\n".join(parts)

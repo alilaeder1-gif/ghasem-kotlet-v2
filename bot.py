@@ -50,7 +50,7 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
     return base
 
 
-async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision) -> str:
+async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision, fallback_prompt: str = None) -> str:
     failover_chain = router_mod.get_failover_chain(route_decision)
     last_error = None
     for provider, model in failover_chain:
@@ -86,6 +86,13 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
                 continue
             if not response or response.startswith(("⚠", "⏳")):
                 last_error = response
+                # If context overflow, retry with lite prompt
+                if response and "CONTEXT_OVERFLOW" in response and fallback_prompt:
+                    logger.info("Context overflow detected, retrying with lite prompt")
+                    from handlers.ai_chat import _call_google as _cg
+                    retry = await asyncio.to_thread(_cg, user_msg, fallback_prompt, history)
+                    if retry and not retry.startswith(("⚠", "⏳")):
+                        return retry
                 continue
             if rq_mod.needs_failover(response, user_msg, ""):
                 continue
@@ -292,7 +299,9 @@ async def main():
             "topic": " ".join(topics),
             "intent": route_decision.intent,
         }
+        from handlers.personality_core import build_lite_prompt
         system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion, context=prompt_context)
+        lite_prompt = build_lite_prompt()
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         try:
@@ -312,20 +321,20 @@ async def main():
         if len(sentences) > 1:
             responses = []
             for s in sentences[:3]:
-                resp = await ask_with_routing(s, system_prompt, history, user_memory, qa_context, route_decision)
+                resp = await ask_with_routing(s, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
                 if not resp.startswith("⚠") and not resp.startswith("⏳"):
                     responses.append(resp)
                 await asyncio.sleep(0.5)
             response = "\n".join(responses[:3])
         else:
-            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
+            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
 
         if not response or response.startswith("⚠") or response.startswith("⏳"):
             return
 
         # Response Quality Check (failover if bad)
-        if rq_mod.needs_failover(response, user_msg, emotion):
-            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
+            if rq_mod.needs_failover(response, user_msg, emotion):
+                response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
             if not response or response.startswith(("⚠", "⏳")):
                 return
 
@@ -345,7 +354,7 @@ async def main():
             if await judge_mod.needs_judge(response):
                 judge_result = await judge_mod.judge_response(response, user_msg, emotion)
                 if not judge_result["passed"]:
-                    retry = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
+                    retry = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
                     if retry and not retry.startswith(("⚠", "⏳")):
                         response = retry
         except:
