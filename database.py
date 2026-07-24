@@ -203,6 +203,63 @@ class Database:
                 PRIMARY KEY (user_id, chat_id)
             );
 
+            CREATE TABLE IF NOT EXISTS user_relationships (
+                user_id INTEGER,
+                chat_id INTEGER,
+                preferred_name TEXT DEFAULT '',
+                speaking_style TEXT DEFAULT 'default',
+                humor_preference INTEGER DEFAULT 5,
+                technical_level INTEGER DEFAULT 5,
+                interaction_mood TEXT DEFAULT 'neutral',
+                last_topic TEXT DEFAULT '',
+                total_interactions INTEGER DEFAULT 0,
+                first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, chat_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS group_modes (
+                chat_id INTEGER PRIMARY KEY,
+                mode TEXT DEFAULT 'friend',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS character_evolution (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phrase TEXT,
+                category TEXT,
+                success_count INTEGER DEFAULT 0,
+                fail_count INTEGER DEFAULT 0,
+                last_used DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(phrase, category)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                user_id INTEGER,
+                message_id INTEGER DEFAULT 0,
+                feedback_type TEXT,
+                response_text TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                user_id INTEGER,
+                user_message TEXT,
+                bot_response TEXT,
+                response_length INTEGER DEFAULT 0,
+                emotion_detected TEXT DEFAULT '',
+                humor_used INTEGER DEFAULT 0,
+                hallucination_risky INTEGER DEFAULT 0,
+                quality_score REAL DEFAULT 0,
+                passed_quality_gate INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS settings_access (
                 chat_id INTEGER,
                 user_id INTEGER,

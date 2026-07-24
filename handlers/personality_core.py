@@ -54,6 +54,12 @@ ANTI_LOOP = _read("anti_loop.md")
 HUMAN_IMPERFECTION = _read("human_imperfection.md")
 HALLUCINATION_GUARD = _read("hallucination_guard.md")
 DEVELOPER_DASHBOARD = _read("developer_dashboard.md")
+ANALYTICS = _read("analytics.md")
+USER_RELATIONSHIPS = _read("user_relationships.md")
+CHARACTER_EVOLUTION = _read("character_evolution.md")
+GROUP_MODES = _read("group_modes.md")
+QUALITY_GATE = _read("quality_gate.md")
+PERSONA_SIGNATURE = _read("persona_signature.md")
 
 FEW_SHOT = (
     _read_example("coding.md") + "\n\n" +
@@ -116,6 +122,12 @@ def build_persona_prompt(settings: dict) -> str:
         HUMAN_IMPERFECTION,
         HALLUCINATION_GUARD,
         DEVELOPER_DASHBOARD,
+        ANALYTICS,
+        USER_RELATIONSHIPS,
+        CHARACTER_EVOLUTION,
+        GROUP_MODES,
+        QUALITY_GATE,
+        PERSONA_SIGNATURE,
         BEHAVIOR,
         BEHAVIOR_TREE_SECTION,
         MEMORY_BANK_REFERENCE,

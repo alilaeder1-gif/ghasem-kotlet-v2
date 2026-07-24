@@ -1,5 +1,5 @@
-__version__ = "5.1.0"
-VERSION = "5.1.0"
+__version__ = "5.2.0"
+VERSION = "5.2.0"
 
 # Semantic Versioning Scheme
 # ===========================
@@ -24,3 +24,5 @@ VERSION = "5.1.0"
 # History:
 # v5.0.0 — Complete persona restructure + evaluation pack
 # v5.1.0 — Hallucination Guard, Developer Dashboard, Score Card, Datasets v1, Regression Test
+# v5.2.0 — Production Ready: Live Behavior Analytics, User Relationship Model,
+#           Character Evolution, Group Personality Modes, Quality Gate, Persona Signature

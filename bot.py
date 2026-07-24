@@ -16,6 +16,12 @@ from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, extract_memory, split_sentences, detect_emotion
 from handlers.personality_core import build_persona_prompt
 from handlers.fun import reminder_worker
+from handlers import user_relationships as rel_mod
+from handlers import analytics as analytics_mod
+from handlers import character_evolution as evol_mod
+from handlers import group_modes as gm_mod
+from handlers import quality_gate as qg_mod
+from handlers import persona_signature as sig_mod
 
 
 async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None) -> str:
@@ -166,6 +172,36 @@ async def main():
 
         settings = await db.get_group_settings(message.chat.id)
         emotion = detect_emotion(user_msg)
+
+        # Group mode adjustment
+        group_mode = {}
+        humor_adjust = 0
+        energy_adjust = 0
+        try:
+            group_mode = await gm_mod.get_group_mode(message.chat.id)
+            mode_sliders = gm_mod.adjust_sliders_for_mode(
+                {"humor_level": settings.get("humor_level", 6), "energy": settings.get("energy", 8)},
+                group_mode,
+            )
+            humor_adjust = mode_sliders.get("humor_level", 6)
+            energy_adjust = mode_sliders.get("energy", 8)
+        except:
+            pass
+
+        # User relationship tracking
+        try:
+            rel = await rel_mod.get_relationship(message.from_user.id, message.chat.id)
+            style = await rel_mod.detect_speaking_style(user_msg)
+            hp = await rel_mod.detect_humor_preference(user_msg)
+            mood = await rel_mod.detect_mood(user_msg)
+            await rel_mod.update_relationship(
+                message.from_user.id, message.chat.id,
+                speaking_style=style, humor_preference=hp, interaction_mood=mood,
+            )
+            await rel_mod.track_interaction(message.from_user.id, message.chat.id, user_msg[:100])
+        except:
+            pass
+
         system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion)
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
@@ -197,8 +233,23 @@ async def main():
         if response.startswith("⚠") or response.startswith("⏳"):
             return
 
+        # Quality Gate
+        humor_used = emotion not in ("annoyed", "sad", "angry")
+        qg_result = await qg_mod.evaluate_response(user_msg, response, emotion)
+        if not qg_result["passed"]:
+            if qg_result.get("length_ok") is False:
+                response = response[:67] + "..."
+            if qg_result.get("personality_ok") is False:
+                response = "داداش " + response.lower()
+            if qg_result.get("humor_ok") is False and humor_used:
+                response = response.replace("😂", "").replace("😄", "").replace("😎", "").strip()
+
+        # Persona Signature
+        response = sig_mod.apply_signature(response)
+
         if len(response) > 70:
             response = response[:67] + "..."
+
         try:
             await message.reply(response)
             await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
@@ -208,6 +259,25 @@ async def main():
                     await db.save_user_memory(message.from_user.id, message.chat.id, new_memory)
             except:
                 pass
+        except:
+            pass
+
+        # Post-response analytics
+        try:
+            await analytics_mod.log_conversation(
+                message.chat.id, message.from_user.id, user_msg, response,
+                emotion=emotion, humor_used=humor_used,
+                quality_score=qg_result.get("score", 1.0),
+                passed_gate=qg_result["passed"],
+            )
+        except:
+            pass
+
+        # Character evolution — track used phrases
+        try:
+            for word in ["داداش", "والا", "دمت", "بابا"]:
+                if word in response:
+                    await evol_mod.record_usage(word, "slang", success=True)
         except:
             pass
 
