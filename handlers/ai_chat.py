@@ -106,13 +106,16 @@ MODELS = [
 ]
 
 OPENROUTER_MODELS = [
+    "nousresearch/hermes-3-llama-3.1-405b",
+    "nousresearch/hermes-2-pro-mistral-7b",
+    "nousresearch/hermes-2-theta-llama-3-8b",
     "qwen/qwen-2.5-coder-32b-instruct",
     "deepseek/deepseek-chat",
-    "nousresearch/hermes-3-llama-3.1-405b",
     "google/gemma-2-27b-it",
 ]
 
 CODE_MODELS = [
+    "nousresearch/hermes-3-llama-3.1-405b",
     "qwen/qwen-2.5-coder-32b-instruct",
     "deepseek/deepseek-coder",
     "cognitivecomputations/dolphin-2.9.3-qwen2-72b",
