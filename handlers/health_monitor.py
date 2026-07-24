@@ -230,7 +230,7 @@ async def _do_health_check(bot):
         pass
 
     unhealthy = {k: v for k, v in results.items()
-                 if not v.startswith("healthy") and v not in ("disabled", "circuit_open")}
+                 if not v.startswith("healthy") and v not in ("disabled", "circuit_open", "ratelimit")}
     healthy_now = {k for k, v in results.items()
                    if v.startswith("healthy") or v in ("disabled",)}
 

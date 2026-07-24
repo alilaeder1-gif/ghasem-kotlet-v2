@@ -151,8 +151,12 @@ def _main_kb() -> InlineKeyboardMarkup:
 async def cmd_panel(message: Message):
     if message.chat.type != "private": return
     if not _check(message.from_user.id): return
-    if not await _ensure_pin(message): return
-    await _show_dashboard(message)
+    try:
+        if not await _ensure_pin(message): return
+        await _show_dashboard(message)
+    except Exception as e:
+        logger.error(f"cmd_panel error: {e}")
+        await message.answer(f"❌ خطا: {str(e)[:100]}")
 
 @router.message(Command("setpin"))
 async def cmd_setpin(message: Message):

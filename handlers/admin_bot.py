@@ -55,8 +55,13 @@ async def _group_list_kb(action: str, page: int = 0) -> InlineKeyboardMarkup:
 async def admin_menu(message: Message):
     if message.chat.type != "private": return
     if message.from_user.id not in ADMIN_IDS: return
-    if not await _ensure_pin(message): return
-    await _show_dashboard(message)
+    try:
+        if not await _ensure_pin(message): return
+        await _show_dashboard(message)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"admin_menu error: {e}")
+        await message.answer(f"❌ خطا: {str(e)[:100]}")
 
 
 @router.callback_query(F.data == "admin_back")
