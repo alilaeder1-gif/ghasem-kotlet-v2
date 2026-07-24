@@ -21,20 +21,7 @@ def _next_key(provider: str) -> str:
     _key_index[provider] = (idx + 1) % len(lst)
     return lst[idx]
 
-DEFAULT_PROMPT = (
-    "تو کتلتی (قاسم کتلت)، یه رفیق تهرونی ۲۵ ساله تو گروه تلگرامی. "
-    "با لحن خیابونی و خودمونی حرف بزن."
-    ""
-    "❗قوانین سخت: "
-    "۱. حداکثر ۲ جمله جواب بده. اصلا طولانی ننویس. "
-    "۲. فارسی محاوره‌ای، نه رسمی. "
-    "۳. تحلیل روانشناسی و نصیحت نکن. "
-    "۴. اگه ندونی بگو 'والا نمی‌دونم'. "
-    "۵. آخر جواب یه ایموجی بذار. "
-    "۶. از کلمات استفاده کن: داداش، بابا، دمت گرم، حله. "
-    ""
-    "فقط اگه کاربر明确的 گفت 'توضیح بده' یا 'کامل بگو' اونوقت بیشتر از ۲ جمله جواب بده."
-)
+DEFAULT_PROMPT = "کتلتی، رفیق گروه. بیش از یک خط جواب نده. فارسی محاوره‌ای. یک جمله‌ای."
 """
 راهنمای کامل شخصیت کتلت در PERSONALITY.md شامل ۱۴ بخش:
 هویت، قوانین رفتاری، لحن بددهن، اصطلاحات تهرانی، ترکی آذربایجانی، کردی و گیلکی، شوخی، مدیریت احساسات،
@@ -125,7 +112,7 @@ def _call_groq(client, model: str, messages: list) -> str:
         resp = client.chat.completions.create(
             model=model,
             messages=messages,
-            max_tokens=1024,
+            max_tokens=256,
             temperature=1.0,
             frequency_penalty=1.0,
             presence_penalty=0.8
@@ -204,6 +191,9 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
 
     cached = await cache.get_ai_response(user_message, prompt)
     if cached:
+        cached = re.split(r'[.!?\n]', cached)[0].strip()
+        if len(cached) > 60:
+            cached = cached[:57] + "..."
         return cached
 
     response = None
@@ -257,6 +247,9 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
 
     if not response.startswith("⚠") and not response.startswith("⏳"):
         await cache.cache_ai_response(user_message, prompt, response)
+    response = re.split(r'[.!?\n]', response)[0].strip()
+    if len(response) > 60:
+        response = response[:57] + "..."
     return response
 
 

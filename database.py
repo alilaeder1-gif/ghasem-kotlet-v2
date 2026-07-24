@@ -321,7 +321,7 @@ class Database:
         )
         await self.db.commit()
 
-    async def get_chat_history(self, chat_id: int, limit: int = 10) -> list[dict]:
+    async def get_chat_history(self, chat_id: int, limit: int = 5) -> list[dict]:
         async with self.db.execute(
             "SELECT message, response FROM chat_history WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?",
             (chat_id, limit)
@@ -331,7 +331,7 @@ class Database:
             for r in reversed(rows):
                 result.append({"role": "user", "content": r["message"]})
                 result.append({"role": "assistant", "content": r["response"]})
-            return result[:limit]
+            return result
 
     async def set_persona(self, chat_id: int, name: str, system_prompt: str):
         await self.db.execute(
