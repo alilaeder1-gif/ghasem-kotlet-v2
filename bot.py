@@ -61,7 +61,7 @@ async def main():
         logger.error("BOT_TOKEN تنظیم نشده!")
         return
 
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
     dp = Dispatcher()
 
     await db.connect()

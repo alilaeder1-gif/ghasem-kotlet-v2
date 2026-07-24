@@ -46,4 +46,6 @@ async def persian_handler(message: Message):
         return
     rest = text[m.end():]
     # rewrite message.text to /command so normal handlers can process it
-    message.text = f"/{eng_cmd}{ ' ' + rest if rest else ''}"
+    # aiogram 3 Message uses frozen pydantic — bypass with object.__setattr__
+    new_text = f"/{eng_cmd}{ ' ' + rest if rest else ''}"
+    object.__setattr__(message, 'text', new_text)
