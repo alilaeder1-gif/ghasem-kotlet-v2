@@ -33,6 +33,8 @@ from handlers.key_pool import groq_pool, openrouter_pool
 from handlers.ai_gateway import smart_route, daily_usage, health_score, make_tiers, TokenBudget
 from handlers.token_estimator import estimate_tokens
 from handlers.admin_panel import record_request, record_error
+from handlers.knowledge_engine import hybrid_flow
+from handlers.key_scheduler import scheduled_health_check
 
 
 async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None, context: dict = None) -> str:
@@ -187,6 +189,7 @@ async def main():
     dp.include_router(admin_panel_router)
 
     asyncio.create_task(reminder_worker())
+    asyncio.create_task(scheduled_health_check())
 
     @dp.message(F.text, ~F.text.startswith("/"))
     async def ai_chat_handler(message: Message):
@@ -341,25 +344,20 @@ async def main():
 
         qa_context = await db.search_similar_qa(message.chat.id, user_msg)
 
-        sentences = split_sentences(user_msg)
-        if len(sentences) > 1:
-            responses = []
-            for s in sentences[:3]:
-                resp = await ask_with_routing(s, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
-                if not resp.startswith("⚠") and not resp.startswith("⏳"):
-                    responses.append(resp)
-                await asyncio.sleep(0.5)
-            response = "\n".join(responses[:3])
-        else:
-            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
+        async def _ai_call():
+            sentences = split_sentences(user_msg)
+            if len(sentences) > 1:
+                parts = []
+                for s in sentences[:3]:
+                    r = await ask_with_routing(s, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
+                    if r and not r.startswith(("⚠", "⏳")): parts.append(r)
+                    await asyncio.sleep(0.5)
+                return "\n".join(parts[:3])
+            return await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
 
-        if not response or response.startswith("⚠") or response.startswith("⏳"):
-            return
+        response = await hybrid_flow(user_msg, message.chat.id, message.from_user.id, _ai_call())
 
-        # Response Quality Check (failover if bad)
-        if rq_mod.needs_failover(response, user_msg, emotion):
-            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
-        if not response or response.startswith(("⚠", "⏳")):
+        if not response or response.startswith(("⚠", "⏳", "❌")):
             return
 
         # Quality Gate

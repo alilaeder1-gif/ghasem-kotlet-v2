@@ -309,15 +309,32 @@ class Database:
                 health REAL DEFAULT 100.0,
                 cooldown_until DATETIME,
                 requests_today INTEGER DEFAULT 0,
+                tokens_today INTEGER DEFAULT 0,
                 total_calls INTEGER DEFAULT 0,
+                failure_count INTEGER DEFAULT 0,
                 last_used DATETIME,
                 last_error TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (provider_id) REFERENCES providers(id)
             );
+            CREATE TABLE IF NOT EXISTS knowledge_base (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                keywords TEXT DEFAULT '',
+                quality_score REAL DEFAULT 0,
+                usage_count INTEGER DEFAULT 0,
+                source TEXT DEFAULT 'ai',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
             INSERT OR IGNORE INTO providers (name) VALUES ('gemini');
             INSERT OR IGNORE INTO providers (name) VALUES ('groq');
             INSERT OR IGNORE INTO providers (name) VALUES ('openrouter');
+            INSERT OR IGNORE INTO providers (name) VALUES ('cerebras');
+            INSERT OR IGNORE INTO providers (name) VALUES ('sambanova');
+            INSERT OR IGNORE INTO providers (name) VALUES ('cloudflare');
+            INSERT OR IGNORE INTO providers (name) VALUES ('deepinfra');
         """)
         await self.db.commit()
 
@@ -455,6 +472,14 @@ class Database:
         for col in ["tehran_accent", "street_language", "energy", "patience"]:
             try:
                 await self.db.execute(f"ALTER TABLE personality_sliders ADD COLUMN {col} INTEGER DEFAULT 0")
+                await self.db.commit()
+            except:
+                pass
+
+        # API keys migration (v5.7.0)
+        for col in ["tokens_today", "failure_count"]:
+            try:
+                await self.db.execute(f"ALTER TABLE api_keys ADD COLUMN {col} INTEGER DEFAULT 0")
                 await self.db.commit()
             except:
                 pass
@@ -847,6 +872,51 @@ class Database:
             (key, value)
         )
         await self.db.commit()
+
+    # ─── Knowledge Base ───
+
+    async def add_knowledge(self, question: str, answer: str, keywords: str = "", quality: float = 0, source: str = "ai"):
+        await self.db.execute(
+            "INSERT INTO knowledge_base (question, answer, keywords, quality_score, source) VALUES (?, ?, ?, ?, ?)",
+            (question[:300], answer[:500], keywords[:200], quality, source)
+        )
+        await self.db.commit()
+
+    async def search_knowledge(self, query: str, threshold: float = 0.3, limit: int = 3) -> list[dict]:
+        words = re.findall(r'[\wآ-ی]+', query.lower())
+        if not words: return []
+        conditions = " OR ".join(["keywords LIKE ?"] * min(len(words), 5))
+        params = [f"%{w}%" for w in words[:5]]
+        try:
+            async with self.db.execute(
+                f"SELECT id, question, answer, quality_score, usage_count FROM knowledge_base WHERE ({conditions}) AND quality_score >= ? ORDER BY quality_score DESC, usage_count DESC LIMIT ?",
+                (*params, threshold, limit)
+            ) as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+        except: return []
+
+    async def get_knowledge_stats(self) -> dict:
+        try:
+            async with self.db.execute("SELECT COUNT(*) as cnt, COALESCE(AVG(quality_score),0) as avg_q FROM knowledge_base") as c:
+                row = await c.fetchone()
+                total = row["cnt"] if row else 0
+                avg_q = row["avg_q"] if row else 0
+            async with self.db.execute("SELECT COUNT(*) as cnt FROM knowledge_base WHERE quality_score >= 4") as c:
+                high = (await c.fetchone())["cnt"]
+            return {"total": total, "avg_quality": round(avg_q, 2), "high_quality": high}
+        except: return {"total": 0, "avg_quality": 0, "high_quality": 0}
+
+    async def increment_knowledge_usage(self, kid: int):
+        try:
+            await self.db.execute("UPDATE knowledge_base SET usage_count = usage_count + 1, updated_at = datetime('now') WHERE id = ?", (kid,))
+            await self.db.commit()
+        except: pass
+
+    async def get_faq_list(self) -> list[dict]:
+        try:
+            async with self.db.execute("SELECT id, question, answer FROM knowledge_base WHERE source = 'faq' ORDER BY usage_count DESC") as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
 
 
 db = Database()
