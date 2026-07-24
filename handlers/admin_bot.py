@@ -240,12 +240,13 @@ async def cb_g_detail_gmsg(cq: CallbackQuery):
     if cq.from_user.id not in ADMIN_IDS:
         return await cq.answer("❌ دسترسی نداری", show_alert=True)
     chat_id = int(cq.data.split("_")[-1])
+    from handlers.admin_panel import _pending as ap_pending
+    ap_pending[cq.from_user.id] = ("gmsg", chat_id)
     await cq.message.edit_text(
         f"✉️ **متن پیام رو بفرست.**\n\n"
         f"پیام به آیدی زیر ارسال میشه:\n`{chat_id}`",
         reply_markup=_back_btn()
     )
-    _pending[cq.from_user.id] = ("gmsg", chat_id)
 
 
 @router.callback_query(F.data.startswith("admin_g_gleave_"))
@@ -279,12 +280,13 @@ async def cb_gmsg_text(cq: CallbackQuery):
     if cq.from_user.id not in ADMIN_IDS:
         return await cq.answer("❌ دسترسی نداری", show_alert=True)
     chat_id = int(cq.data.split("_")[-1])
+    from handlers.admin_panel import _pending as ap_pending
+    ap_pending[cq.from_user.id] = ("gmsg", chat_id)
     await cq.message.edit_text(
         f"✉️ **متن پیام رو بفرست.**\n\n"
         f"به آیدی زیر ارسال میشه:\n`{chat_id}`",
         reply_markup=_back_btn()
     )
-    _pending[cq.from_user.id] = ("gmsg", chat_id)
 
 
 # ─── تاریخچه ───
@@ -388,18 +390,3 @@ async def cb_page(cq: CallbackQuery):
 _pending: dict = {}
 
 
-@router.message(F.text, F.chat.type == "private")
-async def pending_handler(message: Message):
-    uid = message.from_user.id
-    if uid not in _pending:
-        return
-    if uid not in ADMIN_IDS:
-        return
-    action, chat_id = _pending.pop(uid)
-    if action == "gmsg":
-        text = message.text.strip()
-        try:
-            await message.bot.send_message(chat_id, text)
-            await message.answer("✅ **پیام ارسال شد.**", reply_markup=_back_btn())
-        except Exception as e:
-            await message.answer(f"❌ خطا: {e}")

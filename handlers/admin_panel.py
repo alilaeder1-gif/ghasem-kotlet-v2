@@ -548,6 +548,11 @@ async def pending_handler(message: Message):
                 except Exception as e:
                     return await message.answer(f"❌ {e}", reply_markup=_back())
 
+            elif act_type == "gmsg":
+                chat_id = int(action[1])
+                await message.bot.send_message(chat_id, text)
+                return await message.answer("✅ پیام ارسال شد.", reply_markup=_back())
+
         elif action == "broadcast":
             groups = await db.get_all_groups()
             sent = failed = 0
