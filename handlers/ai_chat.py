@@ -11,6 +11,32 @@ logger = logging.getLogger(__name__)
 
 _key_index = {"groq": 0, "gemini": 0, "openrouter": 0}
 
+_EMOJI_ANGRY = re.compile(r'[😡🤬👿💢]', re.UNICODE)
+_EMOJI_SAD = re.compile(r'[😢😭😔😞🥺💔]', re.UNICODE)
+_EMOJI_HAPPY = re.compile(r'[😊😂🤣😁😍🥰😎🎉]', re.UNICODE)
+_EMOJI_JOKING = re.compile(r'[😜🤪😏😉]', re.UNICODE)
+_WORD_ANGRY = re.compile(r'(عصبان|عصب|خشم|دیگه بس|بی‌ادب|کصشر|گوه|فحش)', re.UNICODE)
+_WORD_SAD = re.compile(r'(غمگین|افسرد|دلم گرفته|بدبخت|بیچاره|دلشکست)', re.UNICODE)
+_WORD_JOKING = re.compile(r'(شوخی|می‌خند|بامزه|خنده|جوک|طنز)', re.UNICODE)
+_WORD_SERIOUS = re.compile(r'(علمی|دقیق|مستند|منبع|تحقیق|پایان‌نامه|مقاله|پروژه)', re.UNICODE)
+_WORD_SARCASTIC = re.compile(r'(آفرین بهت|به به|دستت درد نکنه|چه باحال|واقعاً|عه عه)', re.UNICODE)
+_WORD_SCARED = re.compile(r'(ترس|می‌ترس|وحشت|استرس|اضطراب|نگران)', re.UNICODE)
+_WORD_GREETING = re.compile(r'(سلام|درود|علیک|خوبی|چطوری|خوش اومدی)', re.UNICODE)
+
+
+def detect_emotion(text: str) -> str:
+    if _EMOJI_ANGRY.search(text) or _WORD_ANGRY.search(text):
+        return "annoyed"
+    if _EMOJI_SAD.search(text) or _WORD_SAD.search(text) or _WORD_SCARED.search(text):
+        return "serious"
+    if _EMOJI_HAPPY.search(text) or _EMOJI_JOKING.search(text) or _WORD_JOKING.search(text) or _WORD_SARCASTIC.search(text):
+        return "comedy"
+    if _WORD_SERIOUS.search(text):
+        return "serious"
+    if _WORD_GREETING.search(text):
+        return "friendly"
+    return "normal"
+
 
 def _next_key(provider: str) -> str:
     keys = {"groq": GROQ_KEYS, "gemini": GEMINI_KEYS, "openrouter": OPENROUTER_KEYS}

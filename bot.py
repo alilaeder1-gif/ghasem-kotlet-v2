@@ -13,12 +13,12 @@ from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, extract_memory, split_sentences
+from handlers.ai_chat import ask_ai, extract_memory, split_sentences, detect_emotion
 from handlers.personality_core import build_persona_prompt
 from handlers.fun import reminder_worker
 
 
-async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None) -> str:
+async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None) -> str:
     sliders = {}
     if chat_id:
         try:
@@ -29,6 +29,11 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
     base = build_persona_prompt(settings_with_sliders)
     if persona_prompt:
         base += f"\n\n## شخصیت سفارشی\n{persona_prompt}"
+    if emotion and emotion != "normal":
+        base = base.replace("[پیش‌فرض]", "", 1)
+        mood_label = {"friendly": "رفیق‌بازی", "annoyed": "عصبی", "serious": "جدی", "comedy": "طنز"}.get(emotion, "")
+        if mood_label:
+            base += f"\n\n## وضعیت فعلی: {mood_label}\nالان در حالت {mood_label} هستی. طبق این حالت رفتار کن."
     return base
 
 
@@ -160,7 +165,8 @@ async def main():
                         return
 
         settings = await db.get_group_settings(message.chat.id)
-        system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id)
+        emotion = detect_emotion(user_msg)
+        system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion)
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         try:
@@ -273,7 +279,8 @@ async def main():
             if persona and not persona["enabled"]:
                 return
             settings = await db.get_group_settings(message.chat.id)
-            system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id)
+            emotion = detect_emotion(user_msg)
+            system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion)
 
             history = []
             try:

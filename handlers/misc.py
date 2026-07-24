@@ -109,3 +109,20 @@ async def cmd_settings(message: Message):
 
     from handlers.settings_panel import show_main
     await show_main(message, message.chat.id, edit=False)
+
+
+@router.message(Command("prompt"))
+async def cmd_prompt(message: Message):
+    if message.chat.type not in ("group", "supergroup"):
+        return
+    chat_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+    if chat_member.status not in ("creator", "administrator"):
+        return await message.reply("❌ فقط ادمین")
+    from bot import _build_ai_prompt
+    from handlers.ai_chat import detect_emotion
+    settings = await db.get_group_settings(message.chat.id)
+    text = message.text.replace("/prompt", "").strip() or "تست"
+    emo = detect_emotion(text)
+    prompt = await _build_ai_prompt(settings, chat_id=message.chat.id, emotion=emo)
+    preview = prompt[:3500]
+    await message.reply(f"🧠 **Debug Prompt**\nاحساس: {emo}\n\n`{preview}`")
