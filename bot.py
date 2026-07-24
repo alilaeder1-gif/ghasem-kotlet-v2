@@ -23,12 +23,14 @@ from handlers import group_modes as gm_mod
 from handlers import quality_gate as qg_mod
 from handlers import persona_signature as sig_mod
 from handlers import router as router_mod
+from handlers.token_estimator import best_tier
 from handlers import response_quality as rq_mod
 from handlers import response_judge as judge_mod
 from handlers import cost_optimizer as cost_mod
 from handlers import ab_test as ab_mod
 from handlers import emergency_mode as em_mod
-from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, OPENROUTER_MODELS
+from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, _get_groq, _call_groq, OPENROUTER_MODELS
+from handlers.key_pool import groq_pool, openrouter_pool
 
 
 async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None, context: dict = None) -> str:
@@ -53,21 +55,18 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
 async def _try_provider(provider: str, model: str, system_prompt: str, user_msg: str, history: list, history_count: int = 6) -> str | None:
     if provider == "gemini":
         return await asyncio.to_thread(_call_google, user_msg, system_prompt, history)
-    from handlers.ai_chat import _call_groq
     if provider == "groq":
-        from handlers.ai_chat import _get_groq
-        from handlers.key_pool import groq_pool
         gr = _get_groq()
         if not gr:
             return None
         client, key = gr
+        pool = groq_pool
     elif provider == "openrouter":
-        from handlers.ai_chat import _get_openrouter
-        from handlers.key_pool import openrouter_pool
         or_r = _get_openrouter()
         if not or_r:
             return None
         client, key = or_r
+        pool = openrouter_pool
     else:
         return None
     messages = [{"role": "system", "content": system_prompt}]
@@ -76,36 +75,36 @@ async def _try_provider(provider: str, model: str, system_prompt: str, user_msg:
             role = "user" if msg.get("role") == "user" else "assistant"
             messages.append({"role": role, "content": msg.get("content", "")})
     messages.append({"role": "user", "content": user_msg})
-    pool = groq_pool if provider == "groq" else openrouter_pool
     return _call_groq(client, model, messages, pool, key)
 
 
 async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision, fallback_prompt: str = None) -> str:
     failover_chain = router_mod.get_failover_chain(route_decision)
     micro_prompt = build_micro_prompt()
+    lite_prompt = fallback_prompt if fallback_prompt and fallback_prompt != system_prompt else ""
+
+    tiers = {"full": system_prompt, "lite": lite_prompt, "micro": micro_prompt}
     last_error = None
 
-    for cycle, (prompt, hist_count) in enumerate([
-        (system_prompt, 6),
-        (fallback_prompt or system_prompt, 2),
-        (micro_prompt, 1),
-    ]):
-        if cycle > 0 and last_error and "CONTEXT_OVERFLOW" not in str(last_error):
-            break
-        if cycle > 0:
-            logger.info(f"Fallback cycle {cycle}: using reduced prompt ({len(prompt)} chars, {hist_count} history)")
-        for provider, model in failover_chain:
-            try:
-                response = await _try_provider(provider, model, prompt, user_msg, history, hist_count)
-                if not response or response.startswith(("⚠", "⏳")):
-                    last_error = response
-                    continue
-                if rq_mod.needs_failover(response, user_msg, ""):
-                    continue
-                return response
-            except Exception as e:
-                last_error = str(e)
+    for provider, model in failover_chain:
+        try:
+            overhead = sum(len(m.get("content", "")) for m in (history or [])[-6:]) // 4
+            tier = best_tier(model, tiers, overhead)
+            if not tier:
                 continue
+            hist_count = 6 if tier == "full" else (2 if tier == "lite" else 1)
+            prompt = tiers[tier]
+            logger.debug(f"ask_with_routing: {provider}/{model} -> {tier} tier ({hist_count} history)")
+            response = await _try_provider(provider, model, prompt, user_msg, history, hist_count)
+            if not response or response.startswith(("⚠", "⏳")):
+                last_error = response
+                continue
+            if rq_mod.needs_failover(response, user_msg, ""):
+                continue
+            return response
+        except Exception as e:
+            last_error = str(e)
+            continue
 
     return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 

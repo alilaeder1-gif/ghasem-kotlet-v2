@@ -7,6 +7,7 @@ import re
 from cache import cache
 from config import GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, GROQ_KEYS, GEMINI_KEYS, OPENROUTER_KEYS
 from handlers.key_pool import get_pool, classify_error, gemini_pool, groq_pool, openrouter_pool
+from handlers.token_estimator import best_tier
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,9 @@ def _get_google():
     if not key:
         return None
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        _google_client = (model, key)
+        from google import genai
+        client = genai.Client(api_key=key)
+        _google_client = (client, key)
         return _google_client
     except Exception as e:
         logger.error(f"Gemini init error: {e}")
@@ -158,10 +158,10 @@ def _call_google(user_message: str, system_prompt: str, chat_history: list = Non
     result = _get_google()
     if not result:
         return None
-    model, key = result
+    client, key = result
     try:
         full_prompt = f"{system_prompt}\n\n{user_message}"
-        resp = model.generate_content(full_prompt)
+        resp = client.models.generate_content(model="gemini-2.0-flash", contents=full_prompt)
         gemini_pool.record_success(key)
         return resp.text.strip() or "پاسخی دریافت نشد."
     except Exception as e:
@@ -236,69 +236,63 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
             cached = cached[:57] + "..."
         return cached
 
-    response = None
+    # Build prompt tiers
+    try:
+        from handlers.personality_core import build_micro_prompt
+        micro_prompt = build_micro_prompt()
+    except Exception:
+        micro_prompt = ""
+    lite_prompt = fallback_prompt if fallback_prompt and fallback_prompt != prompt else ""
+    full_prompt = prompt + SEARCH_INSTRUCTION
 
-    # 1) Gemini 2.0 Flash
-    if GEMINI_KEYS:
-        response = await asyncio.to_thread(_call_google, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
+    tiers = {"full": full_prompt, "lite": lite_prompt, "micro": micro_prompt}
 
-    # 2) Groq Llama
-    if not response:
-        response = await asyncio.to_thread(_call_deepseek, user_message, prompt + SEARCH_INSTRUCTION, chat_history)
-
-    # 3) OpenRouter
-    if not response:
-        or_result = _get_openrouter()
-        if or_result:
-            or_client, or_key = or_result
-            messages = [{"role": "system", "content": prompt + SEARCH_INSTRUCTION}]
+    def _call_with_tier(provider: str, model: str, tier: str) -> str | None:
+        tier_text = tiers.get(tier)
+        if not tier_text:
+            return None
+        if provider == "gemini":
+            return _call_google(user_message, tier_text, chat_history)
+        sender_fn = _call_deepseek if provider == "groq" else None
+        if provider == "openrouter":
+            or_r = _get_openrouter()
+            if not or_r:
+                return None
+            or_client, or_key = or_r
+            hist_count = 6 if tier == "full" else (2 if tier == "lite" else 1)
+            msgs = [{"role": "system", "content": tier_text}]
             if chat_history:
-                for msg in chat_history[-6:]:
+                for msg in chat_history[-hist_count:]:
                     role = "user" if msg.get("role") == "user" else "assistant"
-                    messages.append({"role": role, "content": msg.get("content", "")})
-            messages.append({"role": "user", "content": user_message})
-            for model in OPENROUTER_MODELS:
-                result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
-                if result is not None:
-                    response = result
-                    break
+                    msgs.append({"role": role, "content": msg.get("content", "")})
+            msgs.append({"role": "user", "content": user_message})
+            return _call_groq(or_client, model, msgs, openrouter_pool, or_key)
+        return None
+
+    # Pre-flight: for each model, find best tier and call once
+    response = None
+    chain = []
+    if GEMINI_KEYS:
+        chain.append(("gemini", "gemini-2.0-flash"))
+    chain.append(("groq", "llama-3.3-70b-versatile"))
+    for m in OPENROUTER_MODELS:
+        chain.append(("openrouter", m))
+
+    for provider, model in chain:
+        overhead = 0
+        if chat_history:
+            overhead = sum(len(m.get("content", "")) for m in chat_history[-6:]) // 4
+        tier = best_tier(model, tiers, overhead)
+        if not tier:
+            continue
+        logger.debug(f"ask_ai: {provider}/{model} -> {tier} tier")
+        response = await asyncio.to_thread(_call_with_tier, provider, model, tier)
+        if response and not response.startswith(("⚠", "⏳")):
+            break
+        response = None
 
     if not response:
-        fallbacks = []
-        if fallback_prompt and fallback_prompt != prompt:
-            fallbacks.append((fallback_prompt, 2))
-        try:
-            from handlers.personality_core import build_micro_prompt
-            micro = build_micro_prompt()
-            if micro and micro != (fallback_prompt or prompt):
-                fallbacks.append((micro, 1))
-        except Exception:
-            pass
-        for fb_prompt, hist_count in fallbacks:
-            logger.info(f"Fallback to reduced prompt ({len(fb_prompt)} chars, {hist_count} history)")
-            if GEMINI_KEYS:
-                response = await asyncio.to_thread(_call_google, user_message, fb_prompt + SEARCH_INSTRUCTION, chat_history)
-            if not response:
-                response = await asyncio.to_thread(_call_deepseek, user_message, fb_prompt + SEARCH_INSTRUCTION, chat_history)
-            if not response:
-                or_result = _get_openrouter()
-                if or_result:
-                    or_client, or_key = or_result
-                    messages = [{"role": "system", "content": fb_prompt + SEARCH_INSTRUCTION}]
-                    if chat_history:
-                        for msg in chat_history[-hist_count:]:
-                            role = "user" if msg.get("role") == "user" else "assistant"
-                            messages.append({"role": role, "content": msg.get("content", "")})
-                    messages.append({"role": "user", "content": user_message})
-                    for model in OPENROUTER_MODELS:
-                        result = _call_groq(or_client, model, messages, openrouter_pool, or_key)
-                        if result is not None and not result.startswith("⚠"):
-                            response = result
-                            break
-            if response:
-                break
-        if not response:
-            return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
+        return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
     if response.startswith("SEARCH:"):
         query = response[len("SEARCH:"):].strip()
