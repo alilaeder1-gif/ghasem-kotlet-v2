@@ -618,11 +618,6 @@ async def settings_panel_cb(cq: CallbackQuery):
         await show_ai_sliders(cq, chat_id)
         return
 
-    if action.startswith("slider_"):
-        slider_key = action[7:]
-        await show_slider_adjust(cq, chat_id, slider_key)
-        return
-
     if action.startswith("slider_inc") or action.startswith("slider_dec"):
         slider_key = parts[2]
         sl = await db.get_personality_sliders(chat_id)
@@ -633,6 +628,11 @@ async def settings_panel_cb(cq: CallbackQuery):
             val = max(val - 1, 0)
         await db.set_personality_slider(chat_id, slider_key, val)
         await cq.answer(f"✅ {slider_key}: {val}/10")
+        await show_slider_adjust(cq, chat_id, slider_key)
+        return
+
+    if action.startswith("slider_"):
+        slider_key = action[7:]
         await show_slider_adjust(cq, chat_id, slider_key)
         return
 

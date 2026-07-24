@@ -263,6 +263,14 @@ class Database:
         except:
             pass
 
+        # Personality sliders migration (new columns for v2.2.0)
+        for col in ["tehran_accent", "street_language", "energy", "patience"]:
+            try:
+                await self.db.execute(f"ALTER TABLE personality_sliders ADD COLUMN {col} INTEGER DEFAULT 0")
+                await self.db.commit()
+            except:
+                pass
+
     async def set_welcome(self, chat_id: int, message: str | None = None, is_enabled: bool = True):
         await self.db.execute(
             "INSERT OR REPLACE INTO welcome_settings (chat_id, message, is_enabled) VALUES (?, ?, ?)",
