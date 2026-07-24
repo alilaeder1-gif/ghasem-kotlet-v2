@@ -1,5 +1,5 @@
-__version__ = "5.3.0"
-VERSION = "5.3.0"
+__version__ = "5.4.0"
+VERSION = "5.4.0"
 
 # Semantic Versioning Scheme (v5 — Field Test Phase)
 # ===================================================
@@ -40,3 +40,5 @@ VERSION = "5.3.0"
 #           Character Evolution, Group Personality Modes, Quality Gate, Persona Signature
 # v5.3.0 — Architecture Upgrade: Modular prompt (core+contextual+examples tiers),
 #           Intelligent Router (intent→provider), Quality-based Failover, Model Benchmark
+# v5.4.0 — Production Hardening: Response Judge (AI second-pass), Cost Optimizer,
+#           Personality A/B Test, Conversation Summary, Emergency Lite Mode

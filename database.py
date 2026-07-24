@@ -245,6 +245,21 @@ class Database:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS ab_test (
+                chat_id INTEGER PRIMARY KEY,
+                variant TEXT NOT NULL DEFAULT 'A',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS ab_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                user_id INTEGER,
+                variant TEXT,
+                feedback_type TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS chat_analytics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER,

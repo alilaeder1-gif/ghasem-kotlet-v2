@@ -24,6 +24,10 @@ from handlers import quality_gate as qg_mod
 from handlers import persona_signature as sig_mod
 from handlers import router as router_mod
 from handlers import response_quality as rq_mod
+from handlers import response_judge as judge_mod
+from handlers import cost_optimizer as cost_mod
+from handlers import ab_test as ab_mod
+from handlers import emergency_mode as em_mod
 from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, OPENROUTER_MODELS
 
 
@@ -252,7 +256,36 @@ async def main():
             pass
 
         is_group = message.chat.type in ("group", "supergroup")
-        route_decision = router_mod.route(user_msg, is_group=is_group)
+
+        # Emergency mode check
+        try:
+            emergency = await em_mod.check_emergency()
+            if emergency.get("active"):
+                route_decision = router_mod.RouteDecision(
+                    intent="simple", preferred_provider="gemini",
+                    preferred_model="gemini-2.0-flash",
+                    humor_ok=False, max_tokens=64, temperature=0.5,
+                    description="Lite mode (emergency)",
+                )
+            else:
+                route_decision = router_mod.route(user_msg, is_group=is_group)
+        except:
+            route_decision = router_mod.route(user_msg, is_group=is_group)
+
+        # A/B Test config
+        try:
+            ab_config = await ab_mod.get_ab_config(message.chat.id)
+            if ab_config:
+                settings = {**settings, **ab_config}
+        except:
+            pass
+
+        # Cost optimizer — track call
+        try:
+            cost_mod.log_call(route_decision.preferred_provider)
+        except:
+            pass
+
         topics = router_mod.detect_topic(user_msg)
         prompt_context = {
             "is_group": is_group,
@@ -306,6 +339,17 @@ async def main():
                 response = "داداش " + response.lower()
             if qg_result.get("humor_ok") is False and humor_used:
                 response = response.replace("😂", "").replace("😄", "").replace("😎", "").strip()
+
+        # Response Judge — second-pass before send
+        try:
+            if await judge_mod.needs_judge(response):
+                judge_result = await judge_mod.judge_response(response, user_msg, emotion)
+                if not judge_result["passed"]:
+                    retry = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
+                    if retry and not retry.startswith(("⚠", "⏳")):
+                        response = retry
+        except:
+            pass
 
         # Persona Signature
         response = sig_mod.apply_signature(response)

@@ -62,6 +62,11 @@ CHARACTER_EVOLUTION = _read("character_evolution.md")
 GROUP_MODES = _read("group_modes.md")
 QUALITY_GATE = _read("quality_gate.md")
 PERSONA_SIGNATURE = _read("persona_signature.md")
+RESPONSE_JUDGE = _read("response_judge.md")
+COST_OPTIMIZER = _read("cost_optimizer.md")
+AB_TEST = _read("ab_test.md")
+CONVERSATION_SUMMARY = _read("conversation_summary.md")
+EMERGENCY_MODE = _read("emergency_mode.md")
 
 ALL_EXAMPLES = {
     "coding": _read_example("coding.md"),
@@ -101,6 +106,8 @@ _CORE_MODULES = [
     "DYNAMIC_CATCHPHRASES", "LEARNING_ENGINE", "WORLD_MODEL",
     "MEMORY", "REASONING", "HUMOR",
     "ANALYTICS", "USER_RELATIONSHIPS", "CHARACTER_EVOLUTION",
+    "RESPONSE_JUDGE", "COST_OPTIMIZER", "AB_TEST",
+    "CONVERSATION_SUMMARY", "EMERGENCY_MODE",
 ]
 
 _GROUP_MODULES = [
