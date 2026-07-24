@@ -1,5 +1,5 @@
-__version__ = "5.2.0"
-VERSION = "5.2.0"
+__version__ = "5.3.0"
+VERSION = "5.3.0"
 
 # Semantic Versioning Scheme (v5 — Field Test Phase)
 # ===================================================
@@ -38,3 +38,5 @@ VERSION = "5.2.0"
 # v5.1.0 — Hallucination Guard, Developer Dashboard, Score Card, Datasets v1, Regression Test
 # v5.2.0 — Production Ready: Live Behavior Analytics, User Relationship Model,
 #           Character Evolution, Group Personality Modes, Quality Gate, Persona Signature
+# v5.3.0 — Architecture Upgrade: Modular prompt (core+contextual+examples tiers),
+#           Intelligent Router (intent→provider), Quality-based Failover, Model Benchmark

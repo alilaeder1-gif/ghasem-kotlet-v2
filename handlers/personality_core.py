@@ -1,4 +1,5 @@
 import os
+import random
 from handlers import memory_bank
 
 _PERSONA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "persona")
@@ -20,6 +21,7 @@ def _read_example(filename: str) -> str:
         return ""
 
 
+# ---- Load all modules ----
 PERSONA_HEADER = _read("identity.md")
 EMOTIONS = _read("emotions.md")
 HUMOR = _read("humor.md")
@@ -61,14 +63,14 @@ GROUP_MODES = _read("group_modes.md")
 QUALITY_GATE = _read("quality_gate.md")
 PERSONA_SIGNATURE = _read("persona_signature.md")
 
-FEW_SHOT = (
-    _read_example("coding.md") + "\n\n" +
-    _read_example("jokes.md") + "\n\n" +
-    _read_example("debate.md") + "\n\n" +
-    _read_example("group.md") + "\n\n" +
-    _read_example("support.md") + "\n\n" +
-    _read_example("casual.md")
-)
+ALL_EXAMPLES = {
+    "coding": _read_example("coding.md"),
+    "jokes": _read_example("jokes.md"),
+    "debate": _read_example("debate.md"),
+    "group": _read_example("group.md"),
+    "support": _read_example("support.md"),
+    "casual": _read_example("casual.md"),
+}
 
 BEHAVIOR_TREE_SECTION = memory_bank.build_behavior_instruction()
 
@@ -86,71 +88,52 @@ MEMORY_BANK_REFERENCE = (
     f"- ترندهاي اخير: {len(memory_bank.RECENT_TRENDS)} ترند روز ايران"
 )
 
+# ---- Module categorization ----
 
-def build_persona_prompt(settings: dict) -> str:
-    parts = [
-        PERSONA_HEADER,
-        EMOTIONS,
-        HUMOR,
-        SLANG,
-        IRAN,
-        HISTORY,
-        MEMORY,
-        REASONING,
-        GROUP_MODE,
-        GROUP_INTELLIGENCE,
-        ANTI_CRINGE,
-        ANTI_AI,
-        ANTI_INJECTION,
-        REFLECTION,
-        CONSISTENCY,
-        CONFIDENCE,
-        SHORT_TERM_MEMORY,
-        STYLE_RANDOMIZATION,
-        STATE_MACHINE,
-        PERSONA_LOCK,
-        DEVELOPER,
-        GOAL_ENGINE,
-        INTENT_ENGINE,
-        PERSONALITY_BLEND,
-        COOLDOWN_SYSTEM,
-        LEARNING_ENGINE,
-        WORLD_MODEL,
-        PERSONA_LORE,
-        DYNAMIC_CATCHPHRASES,
-        ANTI_LOOP,
-        HUMAN_IMPERFECTION,
-        HALLUCINATION_GUARD,
-        DEVELOPER_DASHBOARD,
-        ANALYTICS,
-        USER_RELATIONSHIPS,
-        CHARACTER_EVOLUTION,
-        GROUP_MODES,
-        QUALITY_GATE,
-        PERSONA_SIGNATURE,
-        BEHAVIOR,
-        BEHAVIOR_TREE_SECTION,
-        MEMORY_BANK_REFERENCE,
-    ]
+_CORE_MODULES = [
+    "PERSONA_HEADER", "EMOTIONS", "BEHAVIOR", "PERSONA_LOCK",
+    "CONFIDENCE", "HUMAN_IMPERFECTION", "STYLE_RANDOMIZATION",
+    "SLANG", "ANTI_AI", "ANTI_INJECTION", "ANTI_LOOP",
+    "CONSISTENCY", "SHORT_TERM_MEMORY", "PERSONALITY_BLEND",
+    "COOLDOWN_SYSTEM", "HALLUCINATION_GUARD", "QUALITY_GATE",
+    "PERSONA_SIGNATURE", "ANTI_CRINGE", "STATE_MACHINE",
+    "REFLECTION", "GOAL_ENGINE", "INTENT_ENGINE",
+    "DYNAMIC_CATCHPHRASES", "LEARNING_ENGINE", "WORLD_MODEL",
+    "MEMORY", "REASONING", "HUMOR",
+    "ANALYTICS", "USER_RELATIONSHIPS", "CHARACTER_EVOLUTION",
+]
 
-    friend = int(settings.get("friendliness", 9))
-    humor = int(settings.get("humor_level", 9))
-    sarcasm = int(settings.get("sarcasm_level", 6))
-    confidence = int(settings.get("confidence", 9))
-    empathy = int(settings.get("empathy", 8))
-    tehran = int(settings.get("tehran_accent", 9))
-    street = int(settings.get("street_language", 8))
-    energy = int(settings.get("energy", 9))
-    patience = int(settings.get("patience", 6))
+_GROUP_MODULES = [
+    "GROUP_MODE", "GROUP_INTELLIGENCE", "GROUP_MODES",
+]
 
-    parts.append(
-        "\n## لغزنده‌ها\n"
-        f"دوستانه: {friend}/10 | طنز: {humor}/10 | كنايه: {sarcasm}/10 | "
-        f"اعتمادبه‌نفس: {confidence}/10 | همدلي: {empathy}/10 | "
-        f"لهجه تهراني: {tehran}/10 | كوچه‌بازاري: {street}/10 | "
-        f"انرژي: {energy}/10 | صبر: {patience}/10"
-    )
+_TOPIC_MODULES = {
+    "iran": "IRAN",
+    "history": "HISTORY",
+    "developer": "DEVELOPER",
+}
 
+
+def _pick_examples(context: dict = None) -> str:
+    count = min(2, len(ALL_EXAMPLES))
+    keys = list(ALL_EXAMPLES.keys())
+    if context and context.get("intent") == "coding":
+        keys = ["coding"] + [k for k in keys if k != "coding"]
+    elif context and context.get("intent") == "support":
+        keys = ["support"] + [k for k in keys if k != "support"]
+    selected = keys[:count]
+    return "\n\n".join(ALL_EXAMPLES[k] for k in selected if ALL_EXAMPLES[k])
+
+
+def _build_sliders(settings: dict) -> str:
+    parts = []
+    for key in ["friendliness", "humor_level", "sarcasm_level", "confidence",
+                 "empathy", "tehran_accent", "street_language", "energy", "patience"]:
+        parts.append(f"{key}: {int(settings.get(key, 9))}/10")
+    return "\n".join(parts)
+
+
+def _build_behavior_settings(settings: dict) -> str:
     tone = settings.get("ai_tone", "tehrani")
     tone_map = {
         "tehrani": "لحن: تهروني خيابوني با انرژي. كلمات: داداش، بابا، دمت گرم، حله",
@@ -159,8 +142,6 @@ def build_persona_prompt(settings: dict) -> str:
         "gilaki": "لحن: گيلكي. كلمات: زاك، كولي، ميرزا",
         "normal": "لحن: فارسي روان و معمولي.",
     }
-    parts.append(tone_map.get(tone, tone_map["tehrani"]))
-
     behavior = settings.get("ai_behavior", "default")
     beh_map = {
         "default": "رفتار: خودموني و باحال.",
@@ -171,8 +152,6 @@ def build_persona_prompt(settings: dict) -> str:
         "polite": "رفتار: مؤدب.",
         "rude": "رفتار: گستاخ و تند.",
     }
-    parts.append(beh_map.get(behavior, beh_map["default"]))
-
     personality = settings.get("ai_personality", 3)
     pers_map = {
         1: "شخصيت: رباتي خشك. فقط سوال و جواب.",
@@ -181,14 +160,62 @@ def build_persona_prompt(settings: dict) -> str:
         4: "شخصيت: باحال پرانرژي.",
         5: "شخصيت: پررو و بي‌پروا.",
     }
-    parts.append(pers_map.get(personality, pers_map[3]))
+    return (
+        f"{tone_map.get(tone, tone_map['tehrani'])}\n"
+        f"{beh_map.get(behavior, beh_map['default'])}\n"
+        f"{pers_map.get(personality, pers_map[3])}"
+    )
+
+
+def _resolve(name: str):
+    return globals().get(name, "")
+
+
+def build_core_prompt() -> str:
+    parts = [_resolve(m) for m in _CORE_MODULES if _resolve(m)]
+    return "\n\n".join(parts)
+
+
+def build_contextual_prompt(settings: dict, context: dict = None) -> str:
+    parts = []
+    context = context or {}
+    is_group = context.get("is_group", False)
+    topic = context.get("topic", "").lower()
+    intent = context.get("intent", "")
+
+    if is_group:
+        for m in _GROUP_MODULES:
+            if _resolve(m):
+                parts.append(_resolve(m))
+
+    for keyword, module_name in _TOPIC_MODULES.items():
+        if keyword in topic:
+            if _resolve(module_name):
+                parts.append(_resolve(module_name))
+
+    parts.append(_build_sliders(settings))
+    parts.append(_build_behavior_settings(settings))
 
     parts.append(
         "## قانون نهايي\n"
         "هميشه كوتاه جواب بده. حداكثر ۱-۲ جمله مگر اينكه كاربر توضيح بخواد.\n"
-        "از اموجي كم و هوشمندانه استفاده كن. آخر بعضي جملات يه اموجي مناسب.\n\n"
-        "## نمونه مكالمه\n"
-        + FEW_SHOT
+        "از اموجي كم و هوشمندانه استفاده كن. آخر بعضي جملات يه اموجي مناسب."
     )
 
+    examples = _pick_examples(context)
+    if examples:
+        parts.append("## نمونه مكالمه\n" + examples)
+
+    return "\n\n".join(parts)
+
+
+def build_persona_prompt(settings: dict, context: dict = None) -> str:
+    context = context or {}
+    parts = [build_core_prompt()]
+    parts.append(build_contextual_prompt(settings, context))
+    if context.get("include_developer_dashboard"):
+        if DEVELOPER_DASHBOARD:
+            parts.append(DEVELOPER_DASHBOARD)
+    parts.append(BEHAVIOR_TREE_SECTION)
+    parts.append(MEMORY_BANK_REFERENCE)
     return "\n\n".join(parts)

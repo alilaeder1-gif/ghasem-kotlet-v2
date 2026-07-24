@@ -22,9 +22,12 @@ from handlers import character_evolution as evol_mod
 from handlers import group_modes as gm_mod
 from handlers import quality_gate as qg_mod
 from handlers import persona_signature as sig_mod
+from handlers import router as router_mod
+from handlers import response_quality as rq_mod
+from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, OPENROUTER_MODELS
 
 
-async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None) -> str:
+async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None, context: dict = None) -> str:
     sliders = {}
     if chat_id:
         try:
@@ -32,7 +35,7 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
         except:
             pass
     settings_with_sliders = {**settings, **sliders}
-    base = build_persona_prompt(settings_with_sliders)
+    base = build_persona_prompt(settings_with_sliders, context=context)
     if persona_prompt:
         base += f"\n\n## شخصیت سفارشی\n{persona_prompt}"
     if emotion and emotion != "normal":
@@ -41,6 +44,52 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
         if mood_label:
             base += f"\n\n## وضعیت فعلی: {mood_label}\nالان در حالت {mood_label} هستی. طبق این حالت رفتار کن."
     return base
+
+
+async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision) -> str:
+    failover_chain = router_mod.get_failover_chain(route_decision)
+    last_error = None
+    for provider, model in failover_chain:
+        try:
+            if provider == "gemini":
+                response = await asyncio.to_thread(_call_google, user_msg, system_prompt, history)
+            elif provider == "groq":
+                from handlers.ai_chat import _get_groq
+                client = _get_groq()
+                if not client:
+                    continue
+                messages = [{"role": "system", "content": system_prompt}]
+                if history:
+                    for msg in history[-6:]:
+                        role = "user" if msg.get("role") == "user" else "assistant"
+                        messages.append({"role": role, "content": msg.get("content", "")})
+                messages.append({"role": "user", "content": user_msg})
+                from handlers.ai_chat import _call_groq
+                response = _call_groq(client, model, messages)
+            elif provider == "openrouter":
+                client = _get_openrouter()
+                if not client:
+                    continue
+                messages = [{"role": "system", "content": system_prompt}]
+                if history:
+                    for msg in history[-6:]:
+                        role = "user" if msg.get("role") == "user" else "assistant"
+                        messages.append({"role": role, "content": msg.get("content", "")})
+                messages.append({"role": "user", "content": user_msg})
+                from handlers.ai_chat import _call_groq
+                response = _call_groq(client, model, messages)
+            else:
+                continue
+            if not response or response.startswith(("⚠", "⏳")):
+                last_error = response
+                continue
+            if rq_mod.needs_failover(response, user_msg, ""):
+                continue
+            return response
+        except Exception as e:
+            last_error = str(e)
+            continue
+    return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
 
 def is_persian_greeting(text):
@@ -202,7 +251,15 @@ async def main():
         except:
             pass
 
-        system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion)
+        is_group = message.chat.type in ("group", "supergroup")
+        route_decision = router_mod.route(user_msg, is_group=is_group)
+        topics = router_mod.detect_topic(user_msg)
+        prompt_context = {
+            "is_group": is_group,
+            "topic": " ".join(topics),
+            "intent": route_decision.intent,
+        }
+        system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id, emotion, context=prompt_context)
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         try:
@@ -222,16 +279,22 @@ async def main():
         if len(sentences) > 1:
             responses = []
             for s in sentences[:3]:
-                resp = await ask_ai(s, system_prompt, history, user_memory, qa_context)
+                resp = await ask_with_routing(s, system_prompt, history, user_memory, qa_context, route_decision)
                 if not resp.startswith("⚠") and not resp.startswith("⏳"):
                     responses.append(resp)
                 await asyncio.sleep(0.5)
             response = "\n".join(responses[:3])
         else:
-            response = await ask_ai(user_msg, system_prompt, history, user_memory, qa_context)
+            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
 
-        if response.startswith("⚠") or response.startswith("⏳"):
+        if not response or response.startswith("⚠") or response.startswith("⏳"):
             return
+
+        # Response Quality Check (failover if bad)
+        if rq_mod.needs_failover(response, user_msg, emotion):
+            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision)
+            if not response or response.startswith(("⚠", "⏳")):
+                return
 
         # Quality Gate
         humor_used = emotion not in ("annoyed", "sad", "angry")
