@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 # ─── PIN Authentication ───
 
-_PIN_SESSION: dict[int, float] = {}
 _PIN_ATTEMPTS: dict[int, int] = {}
 _PIN_PENDING: set[int] = set()
 _PIN_TIMEOUT = 86400
@@ -35,24 +34,35 @@ async def _set_pin_hash(pin: str):
 async def _clear_pin():
     await db.set_setting("admin_pin_hash", "")
 
-def _check_session(uid: int) -> bool:
-    if uid in _PIN_SESSION and time.time() - _PIN_SESSION[uid] < _PIN_TIMEOUT:
-        return True
-    _PIN_SESSION.pop(uid, None)
+async def _check_session(uid: int) -> bool:
+    exp_str = await db.get_setting(f"admin_session_{uid}")
+    if exp_str:
+        try:
+            return time.time() < float(exp_str)
+        except: pass
     return False
 
-def _clear_session(uid: int = None):
-    if uid: _PIN_SESSION.pop(uid, None)
-    else: _PIN_SESSION.clear()
+async def _save_session(uid: int):
+    exp = str(time.time() + _PIN_TIMEOUT)
+    await db.set_setting(f"admin_session_{uid}", exp)
+
+async def _clear_session(uid: int = None):
+    if uid:
+        await db.set_setting(f"admin_session_{uid}", "")
 
 async def _ensure_pin(message: Message) -> bool:
     uid = message.from_user.id
     if not _check(uid): return False
-    if _check_session(uid): return True
+    if await _check_session(uid): return True
     pin_hash = await _get_pin_hash()
     if not pin_hash:
         _pending[uid] = "set_pin"
-        await message.answer("🔐 **تنظیم PIN مدیریت**\n\nاولین باره که وارد میشی. یه PIN چهار تا شش رقمی برای دسترسی به پنل انتخاب کن.")
+        await message.answer(
+            "🔐 **تنظیم PIN مدیریت**\n\n"
+            "اولین باره که وارد میشی. یه **PIN چهار تا شش رقمی** "
+            "برای دسترسی به پنل انتخاب کن.\n\n"
+            "✏️ فقط عدد بفرست (مثلاً `1234`)",
+        )
         return False
     _PIN_PENDING.add(uid)
     remaining = _PIN_MAX_ATTEMPTS - _PIN_ATTEMPTS.get(uid, 0)
@@ -143,6 +153,32 @@ async def cmd_panel(message: Message):
     if not _check(message.from_user.id): return
     if not await _ensure_pin(message): return
     await _show_dashboard(message)
+
+@router.message(Command("setpin"))
+async def cmd_setpin(message: Message):
+    if message.chat.type != "private": return
+    if not _check(message.from_user.id): return
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        _pending[message.from_user.id] = "set_pin"
+        return await message.answer("✏️ **PIN جدید (۴ تا ۶ رقمی) رو بفرست**\nمثل: `/setpin 1234`")
+    pin = args[1].strip()
+    if not pin.isdigit() or len(pin) < 4 or len(pin) > 6:
+        return await message.answer("❌ PIN باید ۴ تا ۶ رقمی باشه.")
+    await _set_pin_hash(pin)
+    await _save_session(message.from_user.id)
+    await message.answer("✅ **PIN تنظیم شد.**\nاز این به بعد با این PIN وارد پنل میشی.")
+
+@router.message(Command("resetpin"))
+async def cmd_resetpin(message: Message):
+    if message.chat.type != "private": return
+    if not _check(message.from_user.id): return
+    await _clear_pin()
+    await _clear_session(message.from_user.id)
+    await message.answer(
+        "✅ **PIN پاک شد.**\n\n"
+        "دفعه بعد که وارد پنل بشی، دوباره ازت می‌خوام یه PIN جدید انتخاب کنی."
+    )
 
 @router.callback_query(F.data == "apanel_back")
 async def cb_back(cq: CallbackQuery):
@@ -822,7 +858,9 @@ async def cb_pin_menu(cq: CallbackQuery):
     await cq.message.edit_text(
         "🔐 **مدیریت PIN**\n\n"
         "PIN یه رمز ۴ تا ۶ رقمی برای دسترسی به پنل مدیریته.\n"
-        "تا ۲۴ ساعت یا تا ری‌استارت بات توی حافظه می‌مونه.",
+        "تا ۲۴ ساعت توی حافظه می‌مونه (حتی بعد ری‌استارت).\n\n"
+        "اگر PIN رو فراموش کردی:\n"
+        "• از دستور `/resetpin` توی پیوی بات استفاده کن",
         reply_markup=b.as_markup()
     )
 
@@ -830,14 +868,14 @@ async def cb_pin_menu(cq: CallbackQuery):
 async def cb_pin_change(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     _pending[cq.from_user.id] = "set_pin"
-    _clear_session(cq.from_user.id)
+    await _clear_session(cq.from_user.id)
     await cq.message.edit_text("✏️ **PIN جدید (۴ تا ۶ رقمی) رو بفرست**", reply_markup=_back("apanel_pin"))
 
 @router.callback_query(F.data == "apanel_pin_remove")
 async def cb_pin_remove(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     await _clear_pin()
-    _clear_session(cq.from_user.id)
+    await _clear_session(cq.from_user.id)
     await cq.answer("✅ PIN حذف شد. دیگه برای ورود PIN لازم نیست.", show_alert=True)
     await cb_pin_menu(cq)
 
@@ -968,7 +1006,7 @@ async def pending_handler(message: Message):
             return await message.answer(f"❌ PIN باید ۴ تا ۶ رقمی باشه. ({remaining} تلاش باقی مونده)")
         pin_hash = await _get_pin_hash()
         if pin_hash and hashlib.sha256(text.encode()).hexdigest() == pin_hash:
-            _PIN_SESSION[uid] = time.time()
+            await _save_session(uid)
             _PIN_ATTEMPTS.pop(uid, None)
             return await _show_dashboard(message)
         _PIN_ATTEMPTS[uid] = _PIN_ATTEMPTS.get(uid, 0) + 1
@@ -1082,7 +1120,7 @@ async def pending_handler(message: Message):
                 _pending[uid] = "set_pin"
                 return await message.answer("❌ PIN باید ۴ تا ۶ رقمی باشه. دوباره بفرست.")
             await _set_pin_hash(text)
-            _PIN_SESSION[uid] = time.time()
+            await _save_session(uid)
             return await _show_dashboard(message)
 
         elif action == "offline_new_intent":

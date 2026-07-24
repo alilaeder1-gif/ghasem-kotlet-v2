@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from database import db
 from config import ADMIN_IDS
-from handlers.admin_panel import _main_kb, _ensure_pin, _show_dashboard, _check_session
+from handlers.admin_panel import _main_kb, _ensure_pin, _show_dashboard
 
 router = Router()
 
