@@ -120,25 +120,57 @@ _AI_TONE_DESC = {
     "kurdish":"با اصطلاحات کردی", "gilaki":"با لحن گیلکی رشتی", "normal":"معمولی و ساده"
 }
 
+_SLIDER_NAMES = {
+    "humor_level": ("😂 طنز", 0, 10),
+    "sarcasm_level": ("🙃 کنایه", 0, 10),
+    "friendliness": ("🤗 دوستانه", 0, 10),
+    "formality": ("🎩 رسمی", 0, 10),
+    "empathy": ("💚 همدلی", 0, 10),
+    "confidence": ("💪 اعتمادبه‌نفس", 0, 10),
+    "creativity": ("🎨 خلاقیت", 0, 10),
+    "assertiveness": ("⚡ قاطعیت", 0, 10),
+}
+
 async def show_ai_personality(msg_or_cq, chat_id):
     s = await db.get_group_settings(chat_id)
+    sl = await db.get_personality_sliders(chat_id)
     beh = s.get("ai_behavior", "default")
     tone = s.get("ai_tone", "tehrani")
     pers = s.get("ai_personality", 3)
     pers_desc = {1:"🤖 رباتی خشک", 2:"😐 معمولی", 3:"😊 خودمونی", 4:"😂 باحال", 5:"🔥 پررو"}
+    slider_line = " | ".join([f"{k.split('_')[0][:3]} {sl.get(k, 5)}" for k in _SLIDER_NAMES])
     text = (
         f"🧠 **تنظیمات شخصیت هوش مصنوعی**\n\n"
         f"🎭 **رفتار:** {_AI_BEHAVIOR_NAMES.get(beh, beh)}\n"
         f"🎙 **لحن:** {_AI_TONE_NAMES.get(tone, tone)}\n"
-        f"💪 **شخصیت:** {'⭐'*pers}{'☆'*(5-pers)} ({pers}/5 - {pers_desc[pers]})\n\n"
+        f"💪 **شخصیت:** {'⭐'*pers}{'☆'*(5-pers)} ({pers}/5)\n"
+        f"📊 **لغزنده‌ها:** {slider_line}\n\n"
         f"برای تغییر روی دکمه بزن 👇"
     )
     b = InlineKeyboardBuilder()
     b.button(text=f"🎭 رفتار: {_AI_BEHAVIOR_NAMES.get(beh, beh)}", callback_data=f"sp|ai_beh_list|{chat_id}")
     b.button(text=f"🎙️ لحن: {_AI_TONE_NAMES.get(tone, tone)}", callback_data=f"sp|ai_tone_list|{chat_id}")
     b.button(text=f"💪 شخصیت: {'⭐'*pers}{'☆'*(5-pers)} ({pers}/5)", callback_data=f"sp|ai_pers_list|{chat_id}")
+    b.button(text=f"🎚️ لغزنده‌های شخصیت", callback_data=f"sp|ai_sliders|{chat_id}")
     b.button(text="🔙 بازگشت به تنظیمات", callback_data=f"sp|main|{chat_id}")
     b.adjust(1)
+    await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
+
+async def show_ai_sliders(msg_or_cq, chat_id):
+    sl = await db.get_personality_sliders(chat_id)
+    text = "🎚️ **لغزنده‌های شخصیت**\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\n"
+    for key, (name, mn, mx) in _SLIDER_NAMES.items():
+        val = sl.get(key, 5)
+        bar = "█" * val + "░" * (mx - val)
+        text += f"{name}: {bar} ({val})\n"
+    text += "\nروی یک لغزنده بزن تا کم/زیاد کنی 👇"
+    b = InlineKeyboardBuilder()
+    for key, (name, _, mx) in _SLIDER_NAMES.items():
+        val = sl.get(key, 5)
+        emo = name.split()[0]
+        b.button(text=f"{emo} {val}/10", callback_data=f"sp|slider_{key}|{chat_id}")
+    b.button(text="🔙 بازگشت", callback_data=f"sp|ai_personality|{chat_id}")
+    b.adjust(2)
     await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
 
 _BEH_EMOJI = {"default":"⚙️","friendly":"🤗","formal":"🎩","funny":"😂","cool":"😎","polite":"🙏","rude":"🤬"}
@@ -178,6 +210,27 @@ async def show_ai_tones(msg_or_cq, chat_id):
         sel = f"✅ {emo} " if k == cur else f"{emo} "
         b.button(text=f"{sel}{_AI_TONE_NAMES[k]}", callback_data=f"sp|set_ai_tone|{k}|{chat_id}")
     b.button(text="🔙 بازگشت", callback_data=f"sp|ai_personality|{chat_id}")
+    b.adjust(2)
+    await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
+
+_SLIDER_ADJUST = {}  # chat_id -> {slider_key: value}
+
+async def show_slider_adjust(msg_or_cq, chat_id, slider_key):
+    sl = await db.get_personality_sliders(chat_id)
+    val = sl.get(slider_key, 5)
+    name, mn, mx = _SLIDER_NAMES[slider_key]
+    bar = "█" * val + "░" * (mx - val)
+    text = (
+        f"🎚️ **{name}**\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\n"
+        f"`{bar}` {val}/10\n\n"
+        f"با دکمه‌ها کم و زیاد کن 👇"
+    )
+    b = InlineKeyboardBuilder()
+    if val > mn:
+        b.button(text="➖ کاهش", callback_data=f"sp|slider_dec|{slider_key}|{chat_id}")
+    if val < mx:
+        b.button(text="➕ افزایش", callback_data=f"sp|slider_inc|{slider_key}|{chat_id}")
+    b.button(text="✅ تایید", callback_data=f"sp|ai_sliders|{chat_id}")
     b.adjust(2)
     await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
 
@@ -558,6 +611,28 @@ async def settings_panel_cb(cq: CallbackQuery):
 
     if action == "ai_pers_list":
         await show_ai_pers_levels(cq, chat_id)
+        return
+
+    if action == "ai_sliders":
+        await show_ai_sliders(cq, chat_id)
+        return
+
+    if action.startswith("slider_"):
+        slider_key = action[7:]
+        await show_slider_adjust(cq, chat_id, slider_key)
+        return
+
+    if action.startswith("slider_inc") or action.startswith("slider_dec"):
+        slider_key = parts[2]
+        sl = await db.get_personality_sliders(chat_id)
+        val = sl.get(slider_key, 5)
+        if action.startswith("slider_inc"):
+            val = min(val + 1, 10)
+        else:
+            val = max(val - 1, 0)
+        await db.set_personality_slider(chat_id, slider_key, val)
+        await cq.answer(f"✅ {slider_key}: {val}/10")
+        await show_slider_adjust(cq, chat_id, slider_key)
         return
 
     if action == "spam_set":

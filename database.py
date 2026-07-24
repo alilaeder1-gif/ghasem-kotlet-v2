@@ -182,6 +182,18 @@ class Database:
                 custom_title TEXT DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS personality_sliders (
+                chat_id INTEGER PRIMARY KEY,
+                humor_level INTEGER DEFAULT 5,
+                sarcasm_level INTEGER DEFAULT 4,
+                friendliness INTEGER DEFAULT 7,
+                formality INTEGER DEFAULT 2,
+                empathy INTEGER DEFAULT 6,
+                confidence INTEGER DEFAULT 7,
+                creativity INTEGER DEFAULT 6,
+                assertiveness INTEGER DEFAULT 5
+            );
+
             CREATE TABLE IF NOT EXISTS user_memory (
                 user_id INTEGER,
                 chat_id INTEGER,
@@ -600,6 +612,42 @@ class Database:
         async with self.db.execute("SELECT COUNT(*) as cnt FROM qa_memory WHERE chat_id = ?", (chat_id,)) as cursor:
             row = await cursor.fetchone()
             return row["cnt"] if row else 0
+
+
+    async def get_personality_sliders(self, chat_id: int) -> dict:
+        async with self.db.execute(
+            "SELECT * FROM personality_sliders WHERE chat_id = ?", (chat_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return {
+                    "humor_level": row["humor_level"],
+                    "sarcasm_level": row["sarcasm_level"],
+                    "friendliness": row["friendliness"],
+                    "formality": row["formality"],
+                    "empathy": row["empathy"],
+                    "confidence": row["confidence"],
+                    "creativity": row["creativity"],
+                    "assertiveness": row["assertiveness"],
+                }
+            return {
+                "humor_level": 5,
+                "sarcasm_level": 4,
+                "friendliness": 7,
+                "formality": 2,
+                "empathy": 6,
+                "confidence": 7,
+                "creativity": 6,
+                "assertiveness": 5,
+            }
+
+    async def set_personality_slider(self, chat_id: int, slider: str, value: int):
+        await self.db.execute(
+            f"INSERT INTO personality_sliders (chat_id, {slider}) VALUES (?, ?) "
+            f"ON CONFLICT(chat_id) DO UPDATE SET {slider} = excluded.{slider}",
+            (chat_id, value)
+        )
+        await self.db.commit()
 
 
 db = Database()

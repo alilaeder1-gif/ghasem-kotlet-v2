@@ -13,44 +13,23 @@ from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory, split_sentences
+from handlers.ai_chat import ask_ai, extract_memory, split_sentences
+from handlers.personality_core import build_persona_prompt, CORE_IDENTITY
 from handlers.fun import reminder_worker
 
 
-_TONE_PROMPTS = {
-    "tehrani": "لهجه تهرونی. کلمات: داداش، بابا، دمت گرم، حله. پرانرژی 😎",
-    "turkish": "لحن ترکی. کلمات: قارداش، بالا، گوزل، یاخشی. ترکی+فارسی 🔥",
-    "kurdish": "لحن کردی. کلمات: برات، زۆر، باشه، ڕاست. کردی+فارسی ⚡",
-    "gilaki": "لحن گیلکی. کلمات: زاک، خوش، کولی، میرزا. گیلکی+فارسی 🌿",
-    "normal": "فارسی روان و معمولی. نه رسمی نه محاوره زیاد.",
-}
-
-_BEHAVIOR_PROMPTS = {
-    "default": "خودمونی و باحال، مثل رفیق گرم.",
-    "friendly": "بسیار گرم و صمیمی. مثل دوست قدیمی. کلمات محبت‌آمیز.",
-    "formal": "با احترام و ادب. شوخی نکن مگر کاربر شروع کنه.",
-    "funny": "یه جوک توی جوابت باشه. کاربر رو بخندون.",
-    "cool": "جوون امروزی. کلمات ترند و اسلنگ تلگرامی.",
-    "polite": "مؤدب. بی‌ادبی نکن حتی اگه کاربر کرد.",
-    "rude": "گستاخ و بی‌پروا. توهین کن. بگو کصخل، احمق، بی‌سواد. طوری جواب بده کاربر پشیمون بشه.",
-}
-
-_PERSONALITY_PROMPTS = {
-    1: "سطح ۱ (رباتی): خیلی مختصر. فقط جواب مستقیم. بدون شوخی.",
-    2: "سطح ۲ (معمولی): نسبتاً مختصر. شوخی ملایم کم.",
-    3: "سطح ۳ (خودمونی): معمولی و گرم. شوخی و خنده توی کلام.",
-    4: "سطح ۴ (باحال): پرانرژی. شوخی زیاد. کاربرا حال کنن.",
-    5: "سطح ۵ (پررو): بی‌پروا. شوخی جسورانه. نزدیک خط قرمز.",
-}
-
-
-def _build_ai_prompt(settings: dict, persona_prompt: str = None) -> str:
-    base = persona_prompt or DEFAULT_PROMPT
-    tone = settings.get("ai_tone", "tehrani")
-    behavior = settings.get("ai_behavior", "default")
-    personality = settings.get("ai_personality", 3)
-    extra = f"\n\n{_TONE_PROMPTS.get(tone, _TONE_PROMPTS['tehrani'])}\n{_BEHAVIOR_PROMPTS.get(behavior, _BEHAVIOR_PROMPTS['default'])}\n{_PERSONALITY_PROMPTS.get(personality, _PERSONALITY_PROMPTS[3])}"
-    return base + extra
+async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None) -> str:
+    sliders = {}
+    if chat_id:
+        try:
+            sliders = await db.get_personality_sliders(chat_id)
+        except:
+            pass
+    settings_with_sliders = {**settings, **sliders}
+    base = build_persona_prompt(settings_with_sliders)
+    if persona_prompt:
+        base += f"\n\n## شخصیت سفارشی\n{persona_prompt}"
+    return base
 
 
 def is_persian_greeting(text):
@@ -181,7 +160,7 @@ async def main():
                         return
 
         settings = await db.get_group_settings(message.chat.id)
-        system_prompt = _build_ai_prompt(settings, persona["prompt"] if persona else None)
+        system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id)
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         try:
@@ -294,7 +273,7 @@ async def main():
             if persona and not persona["enabled"]:
                 return
             settings = await db.get_group_settings(message.chat.id)
-            system_prompt = _build_ai_prompt(settings, persona["prompt"] if persona else None)
+            system_prompt = await _build_ai_prompt(settings, persona["prompt"] if persona else None, message.chat.id)
 
             history = []
             try:
