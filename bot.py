@@ -11,7 +11,7 @@ from aiogram import F
 from config import BOT_TOKEN, DATABASE_PATH, REDIS_ENABLED, GROQ_API_KEY, GROQ_KEYS
 from database import db
 from cache import cache
-from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, group_settings
+from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory
 from handlers.fun import reminder_worker
@@ -74,7 +74,6 @@ async def main():
     dp.include_router(group_tracker.router)
     dp.include_router(force_sub.router)
     dp.include_router(fun.router)
-    dp.include_router(group_settings.router)
 
     asyncio.create_task(reminder_worker())
 
