@@ -1,6 +1,7 @@
 import asyncio
 import aiosqlite
 import os
+import re
 import logging
 from config import DATABASE_PATH
 
@@ -60,6 +61,19 @@ class Database:
 
     async def _create_tables(self):
         await self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS qa_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                user_id INTEGER,
+                question TEXT,
+                answer TEXT,
+                keywords TEXT DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_qa_memory_chat ON qa_memory(chat_id);
+            CREATE INDEX IF NOT EXISTS idx_qa_memory_keywords ON qa_memory(keywords);
+
             CREATE TABLE IF NOT EXISTS welcome_settings (
                 chat_id INTEGER PRIMARY KEY,
                 message TEXT DEFAULT NULL,
@@ -556,6 +570,36 @@ class Database:
         async with self.db.execute("SELECT user_id FROM settings_access WHERE chat_id = ?", (chat_id,)) as cursor:
             rows = await cursor.fetchall()
             return [r["user_id"] for r in rows]
+
+
+    async def save_qa_pair(self, chat_id: int, user_id: int, question: str, answer: str):
+        keywords = " ".join(re.findall(r'[\wآ-ی]+', question.lower()))[:200]
+        await self.db.execute(
+            "INSERT INTO qa_memory (chat_id, user_id, question, answer, keywords) VALUES (?, ?, ?, ?, ?)",
+            (chat_id, user_id, question[:300], answer[:500], keywords)
+        )
+        await self.db.commit()
+
+    async def search_similar_qa(self, chat_id: int, query: str, limit: int = 3) -> list[dict]:
+        words = re.findall(r'[\wآ-ی]+', query.lower())
+        if not words:
+            return []
+        conditions = " OR ".join(["keywords LIKE ?"] * min(len(words), 5))
+        params = [f"%{w}%" for w in words[:5]]
+        try:
+            async with self.db.execute(
+                f"SELECT question, answer FROM qa_memory WHERE chat_id = ? AND ({conditions}) ORDER BY created_at DESC LIMIT ?",
+                (chat_id, *params, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [{"question": r["question"], "answer": r["answer"]} for r in rows]
+        except:
+            return []
+
+    async def count_qa_pairs(self, chat_id: int) -> int:
+        async with self.db.execute("SELECT COUNT(*) as cnt FROM qa_memory WHERE chat_id = ?", (chat_id,)) as cursor:
+            row = await cursor.fetchone()
+            return row["cnt"] if row else 0
 
 
 db = Database()

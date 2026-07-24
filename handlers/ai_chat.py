@@ -21,7 +21,7 @@ def _next_key(provider: str) -> str:
     _key_index[provider] = (idx + 1) % len(lst)
     return lst[idx]
 
-DEFAULT_PROMPT = "کتلتی، رفیق گروه. بیش از یک خط جواب نده. فارسی محاوره‌ای. یک جمله‌ای."
+DEFAULT_PROMPT = "کتلتی، رفیق گروه. فارسی محاوره‌ای. کنایه و شوخی رو بفهم و جواب بده. کوتاه جواب بده."
 """
 راهنمای کامل شخصیت کتلت در PERSONALITY.md شامل ۱۴ بخش:
 هویت، قوانین رفتاری، لحن بددهن، اصطلاحات تهرانی، ترکی آذربایجانی، کردی و گیلکی، شوخی، مدیریت احساسات،
@@ -30,11 +30,8 @@ DEFAULT_PROMPT = "کتلتی، رفیق گروه. بیش از یک خط جواب
 """
 
 SEARCH_INSTRUCTION = (
-    "\n\n[سیستم: تو می‌تونی از جستجوی اینترنت استفاده کنی. "
-    "اگه برای جواب دادن به سوال کاربر نیاز به اطلاعات به‌روز یا حقیقت‌های مشخص داری، "
-    "اولین خط پاسخ خودت رو با SEARCH: <عبارت جستجو> شروع کن. "
-    "بعد از جستجو، من نتیجه رو بهت میدم و تو جواب نهایی رو میدی. "
-    "اگه نیازی به جستجو نداری، فقط به طور عادی جواب بده.]"
+    "\n\n[سیستم: اگه شوخی، کنایه، یا سوال خاصی بود اول SEARCH: <عبارت> بزن."
+    "بعد از جستجو جواب نهایی رو بده. وگرنه عادی جواب بده.]"
 )
 
 SEARCH_PROMPT_TEMPLATE = (
@@ -184,8 +181,11 @@ async def web_search(query: str, max_results: int = 5) -> str:
         return ""
 
 
-async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None, user_memory: str = "") -> str:
+async def ask_ai(user_message: str, system_prompt: str = None, chat_history: list = None, user_memory: str = "", qa_context: list = None) -> str:
     prompt = system_prompt or DEFAULT_PROMPT
+    if qa_context:
+        ctx = "\n".join([f"Q: {p['question']}\nA: {p['answer']}" for p in qa_context[-3:]])
+        prompt += f"\n\n[تجربه قبلی من در این گروه:\n{ctx}]"
     if user_memory:
         prompt += f"\n\n[حافظه من از این کاربر: {user_memory}]"
 
@@ -251,6 +251,11 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
     if len(response) > 60:
         response = response[:57] + "..."
     return response
+
+
+def split_sentences(text: str) -> list[str]:
+    parts = re.split(r'(?<=[.!?؟\n])\s*', text)
+    return [p.strip() for p in parts if p.strip()]
 
 
 async def generate_image(prompt: str) -> str:

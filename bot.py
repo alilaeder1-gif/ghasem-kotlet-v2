@@ -13,7 +13,7 @@ from database import db
 from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
-from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory
+from handlers.ai_chat import ask_ai, DEFAULT_PROMPT, extract_memory, split_sentences
 from handlers.fun import reminder_worker
 
 
@@ -195,7 +195,19 @@ async def main():
         except:
             pass
 
-        response = await ask_ai(user_msg, system_prompt, history, user_memory)
+        qa_context = await db.search_similar_qa(message.chat.id, user_msg)
+
+        sentences = split_sentences(user_msg)
+        if len(sentences) > 1:
+            responses = []
+            for s in sentences[:3]:
+                resp = await ask_ai(s, system_prompt, history, user_memory, qa_context)
+                if not resp.startswith("⚠") and not resp.startswith("⏳"):
+                    responses.append(resp)
+                await asyncio.sleep(0.5)
+            response = "\n".join(responses[:3])
+        else:
+            response = await ask_ai(user_msg, system_prompt, history, user_memory, qa_context)
 
         if response.startswith("⚠") or response.startswith("⏳"):
             await message.reply(response)
@@ -212,6 +224,11 @@ async def main():
                     await db.save_user_memory(message.from_user.id, message.chat.id, new_memory)
             except:
                 pass
+        except:
+            pass
+
+        try:
+            await db.save_qa_pair(message.chat.id, message.from_user.id, user_msg, response)
         except:
             pass
 
@@ -285,13 +302,18 @@ async def main():
             except:
                 pass
 
-            response = await ask_ai(user_msg, system_prompt, history)
+            qa_context = await db.search_similar_qa(message.chat.id, user_msg)
+            response = await ask_ai(user_msg, system_prompt, history, qa_context=qa_context)
             if response.startswith("⚠") or response.startswith("⏳"):
                 await message.reply(response)
             else:
                 if len(response) > 70:
                     response = response[:67] + "..."
                 await message.reply(f"🎤 {response}")
+                try:
+                    await db.save_qa_pair(message.chat.id, message.from_user.id, user_msg, response)
+                except:
+                    pass
         except Exception as e:
             await message.reply(f"⚠️ خطا: {str(e)[:100]}")
 
