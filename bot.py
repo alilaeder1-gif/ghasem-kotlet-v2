@@ -206,6 +206,10 @@ async def main():
     from handlers.idempotency import idempotency
     dp.update.outer_middleware(lambda handler, event, data: _idempotency_middleware(handler, event, data))
 
+    # ─── Persian Command Translator (FIRST — mutates text before all handlers) ───
+    from handlers import persian_cmds
+    dp.include_router(persian_cmds.router)
+
     # ─── Group Management (no AI dependency) ───
     from handlers.admin import router as admin_router
     dp.include_router(admin_router)
@@ -229,8 +233,6 @@ async def main():
     # ─── AI Features (separate, may fail) ───
     from handlers import admin_bot
     dp.include_router(admin_bot.router)
-    from handlers import persian_cmds
-    dp.include_router(persian_cmds.router)
     from handlers import persona
     dp.include_router(persona.router)
     from handlers import settings_panel

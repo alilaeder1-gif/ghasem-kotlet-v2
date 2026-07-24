@@ -6,12 +6,12 @@ import re
 
 router = Router()
 
-PERSIAN_RE = re.compile(r"^(بن|سیک|سیکتیر|میوت|آنبن|انبن|آنمیوت|پین|نگ)(?:\s|$)")
+PERSIAN_RE = re.compile(r"^(بن|سیک|سیکتیر|میوت|آنبن|انبن|آنمیوت|پین|نگ|منشن)(?:\s|$)")
 
 PERSIAN_CMDS = {
     "بن": "ban", "سیک": "kick", "سیکتیر": "kickban",
     "میوت": "mute", "آنبن": "unban", "انبن": "unban",
-    "آنمیوت": "unmute", "پین": "pin", "نگ": "tag",
+    "آنمیوت": "unmute", "پین": "pin", "نگ": "tag", "منشن": "tag",
 }
 
 
@@ -236,6 +236,30 @@ async def pin_message(message: Message):
         await message.reply("پیام پین شد.")
     except Exception as e:
         await message.reply(f"خطا در پین کردن: {e}")
+
+
+@router.message(Command("tag"))
+async def cmd_tag(message: Message):
+    if not await _assert_group_admin(message):
+        return
+    tag_text = message.text.replace("/tag", "").strip()
+    from database import db as _db
+    users = await _db.get_group_users(message.chat.id)
+    if not users:
+        return await message.reply("❌ هیچ کاربری نیست.")
+    mentions = []
+    for u in users[:30]:
+        name = u["full_name"] or u["username"] or f"user{u['user_id']}"
+        mentions.append(f"[{name}](tg://user?id={u['user_id']})")
+    chunk_size = 5
+    import asyncio
+    for i in range(0, len(mentions), chunk_size):
+        chunk = mentions[i:i + chunk_size]
+        msg = " ".join(chunk)
+        if tag_text:
+            msg = f"{tag_text}\n\n{msg}"
+        await message.reply(msg)
+        await asyncio.sleep(1)
 
 
 # ─── Warn system ───

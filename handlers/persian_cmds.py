@@ -28,6 +28,9 @@ PERSIAN_MAP = {
     "پیام همگانی": "broadcast",
     "آمار گروه": "groupstats", "اطلاعات کاربر": "userinfo",
     "اجباری": "forcesub", "بررسی": "checksub",
+    "اخطار": "warn", "حذف اخطار": "delwarn", "اخطارها": "warns",
+    "ساکت": "mute", "آنمیت": "unmute",
+    "تنظیمات": "settings",
 }
 
 _keys = sorted(PERSIAN_MAP.keys(), key=len, reverse=True)
