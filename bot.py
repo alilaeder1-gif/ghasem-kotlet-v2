@@ -23,7 +23,15 @@ from handlers import group_modes as gm_mod
 from handlers import quality_gate as qg_mod
 from handlers import persona_signature as sig_mod
 from handlers import router as router_mod
-from handlers.token_estimator import best_tier
+from handlers import response_quality as rq_mod
+from handlers import response_judge as judge_mod
+from handlers import cost_optimizer as cost_mod
+from handlers import ab_test as ab_mod
+from handlers import emergency_mode as em_mod
+from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, _get_groq, _call_groq, OPENROUTER_MODELS
+from handlers.key_pool import groq_pool, openrouter_pool
+from handlers.ai_gateway import smart_route, daily_usage, health_score, make_tiers, TokenBudget
+from handlers.token_estimator import estimate_tokens
 from handlers import response_quality as rq_mod
 from handlers import response_judge as judge_mod
 from handlers import cost_optimizer as cost_mod
@@ -79,31 +87,34 @@ async def _try_provider(provider: str, model: str, system_prompt: str, user_msg:
 
 
 async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision, fallback_prompt: str = None) -> str:
-    failover_chain = router_mod.get_failover_chain(route_decision)
     micro_prompt = build_micro_prompt()
     lite_prompt = fallback_prompt if fallback_prompt and fallback_prompt != system_prompt else ""
-
-    tiers = {"full": system_prompt, "lite": lite_prompt, "micro": micro_prompt}
+    tiers = make_tiers(system_prompt, lite_prompt, micro_prompt)
     last_error = None
 
-    for provider, model in failover_chain:
+    candidates = smart_route(route_decision.intent, tiers, len(history or []))
+    if not candidates:
+        candidates = [{"provider": "gemini", "model": "gemini-2.0-flash", "tier": "full", "pool": "gemini"}]
+
+    for c in candidates:
         try:
-            overhead = sum(len(m.get("content", "")) for m in (history or [])[-6:]) // 4
-            tier = best_tier(model, tiers, overhead)
-            if not tier:
-                continue
+            provider, model, tier = c["provider"], c["model"], c["tier"]
             hist_count = 6 if tier == "full" else (2 if tier == "lite" else 1)
-            prompt = tiers[tier]
-            logger.debug(f"ask_with_routing: {provider}/{model} -> {tier} tier ({hist_count} history)")
-            response = await _try_provider(provider, model, prompt, user_msg, history, hist_count)
+            compressed = TokenBudget.select_history(estimate_tokens(tiers[tier] or ""), history, tier)
+            logger.debug(f"ask_with_routing: {provider}/{model} -> {tier} tier ({len(compressed)} msgs)")
+            response = await _try_provider(provider, model, tiers[tier] or "", user_msg, compressed, hist_count)
             if not response or response.startswith(("⚠", "⏳")):
                 last_error = response
+                health_score.record(model, False)
                 continue
+            health_score.record(model, True)
+            daily_usage.record(f"{provider}:{model}", estimate_tokens(response))
             if rq_mod.needs_failover(response, user_msg, ""):
                 continue
             return response
         except Exception as e:
             last_error = str(e)
+            health_score.record(c["model"], False)
             continue
 
     return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
