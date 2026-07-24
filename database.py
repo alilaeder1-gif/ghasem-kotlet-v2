@@ -182,6 +182,16 @@ class Database:
             await self.db.commit()
         except:
             pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN link_delete_enabled INTEGER DEFAULT 0")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN link_delete_delay INTEGER DEFAULT 0")
+            await self.db.commit()
+        except:
+            pass
 
     async def set_welcome(self, chat_id: int, message: str | None = None, is_enabled: bool = True):
         await self.db.execute(
@@ -420,7 +430,7 @@ class Database:
             await self.db.execute("INSERT INTO group_settings (chat_id) VALUES (?)", (chat_id,))
         
         for key, value in kwargs.items():
-            if key in ["force_sub_channel", "force_sub_enabled", "welcome_enabled", "spam_protection", "flood_protection", "ai_chat_enabled", "custom_title"]:
+            if key in ["force_sub_channel", "force_sub_enabled", "welcome_enabled", "spam_protection", "flood_protection", "ai_chat_enabled", "custom_title", "link_delete_enabled", "link_delete_delay"]:
                 await self.db.execute(f"UPDATE group_settings SET {key} = ? WHERE chat_id = ?", (value, chat_id))
         await self.db.commit()
 
@@ -429,6 +439,8 @@ class Database:
             row = await cursor.fetchone()
             if row:
                 return {
+                    "link_delete_enabled": bool(row["link_delete_enabled"]) if "link_delete_enabled" in row.keys() else False,
+                    "link_delete_delay": row["link_delete_delay"] if "link_delete_delay" in row.keys() else 0,
                     "force_sub_channel": row["force_sub_channel"],
                     "force_sub_enabled": bool(row["force_sub_enabled"]),
                     "welcome_enabled": bool(row["welcome_enabled"]),

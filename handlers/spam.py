@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from aiogram import Router, F
 from aiogram.types import Message, ChatMemberUpdated
+from aiogram.filters import Command
 from aiogram.enums import ChatType
 from database import db
 from config import SPAM_THRESHOLD, SPAM_WINDOW
@@ -97,6 +98,34 @@ def score_text(text: str) -> int:
     return score
 
 
+LINK_RE = re.compile(r"(https?://[^\s]+|t\.me/[a-zA-Z0-9_]+|www\.[^\s]+)")
+
+
+async def check_link_delete(message: Message, settings: dict) -> bool:
+    if not settings.get("link_delete_enabled"):
+        return True
+    delay = settings.get("link_delete_delay", 0)
+    text = message.text or message.caption or ""
+    if not LINK_RE.search(text):
+        return True
+    if delay == 0:
+        return False
+    try:
+        chat_member = await message.chat.get_member(message.from_user.id)
+        if chat_member.status == "member":
+            now = datetime.now()
+            joined_at = chat_member.joined_date
+            if joined_at:
+                if isinstance(joined_at, (int, float)):
+                    joined_at = datetime.fromtimestamp(joined_at)
+                minutes_since_join = (now - joined_at).total_seconds() / 60
+                if minutes_since_join < delay:
+                    return False
+    except Exception:
+        pass
+    return True
+
+
 async def take_action(chat_id: int, user_id: int, full_name: str, bot, reason: str):
     user_spam_score[user_id] += 1
     score = user_spam_score[user_id]
@@ -152,6 +181,14 @@ async def check_spam(message: Message):
     if muted:
         try:
             await message.delete()
+        except Exception:
+            pass
+        return
+
+    if not await check_link_delete(message, settings):
+        try:
+            await message.delete()
+            await db.log_spam(message.chat.id, message.from_user.id, "[link] " + (message.text or "")[:100])
         except Exception:
             pass
         return
@@ -225,3 +262,39 @@ async def new_member_anti_spam(message: Message):
             f"🔒 تا ۳۰ دقیقه حق ارسال لینک نداری.",
             delete_after=10
         )
+
+
+@router.message(Command("linkdelete"))
+async def set_link_delete(message: Message):
+    if message.chat.type not in ("group", "supergroup"):
+        return
+    chat_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+    if chat_member.status not in ("creator", "administrator"):
+        return await message.reply("فقط ادمین‌ها می‌تونن تنظیم کنن.")
+
+    args = message.text.replace("/linkdelete", "").strip().split()
+    if len(args) < 1:
+        return await message.reply(
+            "🔗 **مدیریت حذف لینک**\n\n"
+            "/linkdelete on - حذف فوری تمام لینک‌ها\n"
+            "/linkdelete 30 - حذف لینک تا ۳۰ دقیقه بعد از جوین\n"
+            "/linkdelete off - غیرفعال کردن\n\n"
+            "عدد به معنی دقیقه هست (۰ = فوری)."
+        )
+
+    if args[0].lower() == "off":
+        await db.update_group_settings(message.chat.id, link_delete_enabled=0, link_delete_delay=0)
+        return await message.reply("❌ حذف خودکار لینک غیرفعال شد.")
+
+    if args[0].lower() == "on" or args[0] == "0":
+        await db.update_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=0)
+        return await message.reply("✅ حذف فوری لینک فعال شد. همه لینک‌ها حذف میشن.")
+
+    try:
+        delay = int(args[0])
+        if delay < 1:
+            delay = 1
+        await db.update_group_settings(message.chat.id, link_delete_enabled=1, link_delete_delay=delay)
+        await message.reply(f"✅ حذف لینک فعال شد. لینک کاربران جدید تا {delay} دقیقه حذف میشه.")
+    except ValueError:
+        await message.reply("عدد معتبر وارد کن.")
