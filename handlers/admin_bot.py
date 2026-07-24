@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database import db
 from config import ADMIN_IDS
-from handlers.admin_panel import _main_kb
+from handlers.admin_panel import _main_kb, _ensure_pin, _show_dashboard, _check_session
 
 router = Router()
 
@@ -52,11 +52,10 @@ async def _group_list_kb(action: str, page: int = 0) -> InlineKeyboardMarkup:
 
 @router.message(F.text == "/ghasemkotlet")
 async def admin_menu(message: Message):
-    if message.chat.type != "private":
-        return
-    if message.from_user.id not in ADMIN_IDS:
-        return
-    await message.answer("🏠 **داشبورد مدیریت کتلت**\nاز منوی زیر گزینه مورد نظر رو انتخاب کن.", reply_markup=_main_kb())
+    if message.chat.type != "private": return
+    if message.from_user.id not in ADMIN_IDS: return
+    if not await _ensure_pin(message): return
+    await _show_dashboard(message)
 
 
 @router.callback_query(F.data == "admin_back")

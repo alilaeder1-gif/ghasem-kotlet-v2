@@ -1,4 +1,5 @@
 import time
+import hashlib
 import logging
 from datetime import datetime, timezone
 from aiogram import Router, F
@@ -13,6 +14,56 @@ from handlers.ai_gateway import daily_usage, health_score
 router = Router()
 _pending: dict = {}
 logger = logging.getLogger(__name__)
+
+# ─── PIN Authentication ───
+
+_PIN_SESSION: dict[int, float] = {}
+_PIN_ATTEMPTS: dict[int, int] = {}
+_PIN_PENDING: set[int] = set()
+_PIN_TIMEOUT = 86400
+_PIN_MAX_ATTEMPTS = 5
+_PIN_COOLDOWN = 300
+
+async def _get_pin_hash() -> str | None:
+    try: return await db.get_setting("admin_pin_hash") or None
+    except: return None
+
+async def _set_pin_hash(pin: str):
+    h = hashlib.sha256(pin.encode()).hexdigest()
+    await db.set_setting("admin_pin_hash", h)
+
+async def _clear_pin():
+    await db.set_setting("admin_pin_hash", "")
+
+def _check_session(uid: int) -> bool:
+    if uid in _PIN_SESSION and time.time() - _PIN_SESSION[uid] < _PIN_TIMEOUT:
+        return True
+    _PIN_SESSION.pop(uid, None)
+    return False
+
+def _clear_session(uid: int = None):
+    if uid: _PIN_SESSION.pop(uid, None)
+    else: _PIN_SESSION.clear()
+
+async def _ensure_pin(message: Message) -> bool:
+    uid = message.from_user.id
+    if not _check(uid): return False
+    if _check_session(uid): return True
+    pin_hash = await _get_pin_hash()
+    if not pin_hash:
+        _pending[uid] = "set_pin"
+        await message.answer("🔐 **تنظیم PIN مدیریت**\n\nاولین باره که وارد میشی. یه PIN چهار تا شش رقمی برای دسترسی به پنل انتخاب کن.")
+        return False
+    _PIN_PENDING.add(uid)
+    remaining = _PIN_MAX_ATTEMPTS - _PIN_ATTEMPTS.get(uid, 0)
+    if remaining <= 0:
+        await message.answer(f"⏳ **زیاد تلاش کردی!** {_PIN_COOLDOWN // 60} دقیقه صبر کن.")
+        return False
+    await message.answer(f"🔐 **PIN مدیریت رو وارد کن** ({remaining} تلاش باقی مونده)")
+    return False
+
+async def _show_dashboard(message: Message):
+    await message.answer("🏠 **داشبورد مدیریت کتلت**\nاز منوی زیر گزینه مورد نظر رو انتخاب کن.", reply_markup=_main_kb())
 
 # ─── In-memory stats ───
 
@@ -73,6 +124,7 @@ _MAIN_MENU = [
     ("📢 ارسال همگانی", "apanel_broadcast"),
     ("⚙️ تنظیمات زنده", "apanel_settings"),
     ("🧹 مدیریت حافظه", "apanel_memory"),
+    ("🔐 تغییر PIN", "apanel_pin"),
 ]
 
 def _main_kb() -> InlineKeyboardMarkup:
@@ -84,9 +136,10 @@ def _main_kb() -> InlineKeyboardMarkup:
 
 @router.message(Command("panel"))
 async def cmd_panel(message: Message):
-    if not _check(message.from_user.id): return
     if message.chat.type != "private": return
-    await message.answer("🔐 **پنل مدیریت پیشرفته**", reply_markup=_main_kb())
+    if not _check(message.from_user.id): return
+    if not await _ensure_pin(message): return
+    await _show_dashboard(message)
 
 @router.callback_query(F.data == "apanel_back")
 async def cb_back(cq: CallbackQuery):
@@ -479,16 +532,77 @@ async def cb_mem_stats(cq: CallbackQuery):
         await cq.message.edit_text(f"❌ {e}", reply_markup=_back("apanel_memory"))
 
 # ═══════════════════════════════════════════
+# PIN MANAGEMENT
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "apanel_pin")
+async def cb_pin_menu(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    b = InlineKeyboardBuilder()
+    b.button(text="🔐 تغییر PIN", callback_data="apanel_pin_change")
+    b.button(text="🗑 حذف PIN", callback_data="apanel_pin_remove")
+    b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(2)
+    await cq.message.edit_text(
+        "🔐 **مدیریت PIN**\n\n"
+        "PIN یه رمز ۴ تا ۶ رقمی برای دسترسی به پنل مدیریته.\n"
+        "تا ۲۴ ساعت یا تا ری‌استارت بات توی حافظه می‌مونه.",
+        reply_markup=b.as_markup()
+    )
+
+@router.callback_query(F.data == "apanel_pin_change")
+async def cb_pin_change(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    _pending[cq.from_user.id] = "set_pin"
+    _clear_session(cq.from_user.id)
+    await cq.message.edit_text("✏️ **PIN جدید (۴ تا ۶ رقمی) رو بفرست**", reply_markup=_back("apanel_pin"))
+
+@router.callback_query(F.data == "apanel_pin_remove")
+async def cb_pin_remove(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    await _clear_pin()
+    _clear_session(cq.from_user.id)
+    await cq.answer("✅ PIN حذف شد. دیگه برای ورود PIN لازم نیست.", show_alert=True)
+    await cb_pin_menu(cq)
+
+# ═══════════════════════════════════════════
 # PENDING MESSAGE HANDLER
 # ═══════════════════════════════════════════
 
 @router.message(F.text, F.chat.type == "private")
 async def pending_handler(message: Message):
     uid = message.from_user.id
-    if uid not in _pending: return
     if not _check(uid): return
-    action = _pending.pop(uid)
     text = message.text.strip()
+
+    # ─── PIN Authentication ───
+    if uid in _PIN_PENDING:
+        _PIN_PENDING.discard(uid)
+        remaining = _PIN_MAX_ATTEMPTS - _PIN_ATTEMPTS.get(uid, 0)
+        if remaining <= 0:
+            return await message.answer(f"⏳ تلاش‌هات تموم شد. {_PIN_COOLDOWN // 60} دقیقه صبر کن.")
+        if not text.isdigit() or len(text) < 4 or len(text) > 6:
+            _PIN_ATTEMPTS[uid] = _PIN_ATTEMPTS.get(uid, 0) + 1
+            remaining -= 1
+            if remaining <= 0:
+                return await message.answer(f"⏳ تلاش‌هات تموم شد. {_PIN_COOLDOWN // 60} دقیقه صبر کن.")
+            _PIN_PENDING.add(uid)
+            return await message.answer(f"❌ PIN باید ۴ تا ۶ رقمی باشه. ({remaining} تلاش باقی مونده)")
+        pin_hash = await _get_pin_hash()
+        if pin_hash and hashlib.sha256(text.encode()).hexdigest() == pin_hash:
+            _PIN_SESSION[uid] = time.time()
+            _PIN_ATTEMPTS.pop(uid, None)
+            return await _show_dashboard(message)
+        _PIN_ATTEMPTS[uid] = _PIN_ATTEMPTS.get(uid, 0) + 1
+        remaining -= 1
+        if remaining <= 0:
+            return await message.answer(f"⏳ PIN اشتباه! {_PIN_COOLDOWN // 60} دقیقه صبر کن.")
+        _PIN_PENDING.add(uid)
+        return await message.answer(f"❌ PIN اشتباه! ({remaining} تلاش باقی مونده)")
+
+    # ─── Regular pending actions ───
+    if uid not in _pending: return
+    action = _pending.pop(uid)
 
     try:
         if action == "users_search":
@@ -567,6 +681,14 @@ async def pending_handler(message: Message):
             uid_clear = int(text)
             await db.save_user_memory(uid_clear, 0, "")
             return await message.answer(f"✅ حافظه `{uid_clear}` پاک شد.", reply_markup=_back("apanel_memory"))
+
+        elif action == "set_pin":
+            if not text.isdigit() or len(text) < 4 or len(text) > 6:
+                _pending[uid] = "set_pin"
+                return await message.answer("❌ PIN باید ۴ تا ۶ رقمی باشه. دوباره بفرست.")
+            await _set_pin_hash(text)
+            _PIN_SESSION[uid] = time.time()
+            return await _show_dashboard(message)
 
     except ValueError:
         return await message.answer("❌ آیدی کاربر باید عدد باشه.", reply_markup=_back())
