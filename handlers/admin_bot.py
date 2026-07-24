@@ -125,10 +125,13 @@ async def cb_g_show(cq: CallbackQuery):
     ai_status = "✅ فعال" if not settings or settings.get("ai_chat_enabled", True) else "❌ غیرفعال"
     spam_status = "✅ فعال" if not settings or settings.get("spam_protection", True) else "❌ غیرفعال"
     flood_status = "✅ فعال" if not settings or settings.get("flood_protection", True) else "❌ غیرفعال"
+    force_sub_status = "✅ فعال" if settings and settings.get("force_sub_enabled") else "❌ غیرفعال"
+    force_sub_ch = f" @{settings['force_sub_channel']}" if settings and settings.get("force_sub_channel") else ""
     b = InlineKeyboardBuilder()
     b.button(text="🔄 تغییر وضعیت AI", callback_data=f"admin_g_gtoggle_{chat_id}")
     b.button(text=f"🛡 اسپم: {spam_status}", callback_data=f"admin_g_spam_{chat_id}")
     b.button(text=f"🌊 سیل: {flood_status}", callback_data=f"admin_g_flood_{chat_id}")
+    b.button(text=f"📢 عضویت اجباری: {force_sub_status}", callback_data=f"admin_g_forcesub_{chat_id}")
     b.button(text="📋 تاریخچه", callback_data=f"admin_g_ghistory_{chat_id}")
     b.button(text="✉️ ارسال پیام", callback_data=f"admin_g_gmsg_{chat_id}")
     b.button(text="🚪 خروج از گروه", callback_data=f"admin_g_gleave_{chat_id}")
@@ -140,7 +143,8 @@ async def cb_g_show(cq: CallbackQuery):
         f"👥 اعضا: {g['members']}\n"
         f"🤖 AI: {ai_status}\n"
         f"🛡 محافظت اسپم: {spam_status}\n"
-        f"🌊 محافظت سیل: {flood_status}",
+        f"🌊 محافظت سیل: {flood_status}\n"
+        f"📢 عضویت اجباری: {force_sub_status}{force_sub_ch}",
         reply_markup=b.as_markup()
     )
 
@@ -183,6 +187,18 @@ async def cb_g_toggle_flood(cq: CallbackQuery):
     current = settings.get("flood_protection", True) if settings else True
     await db.update_group_settings(chat_id, flood_protection=int(not current))
     await cq.answer(f"محافظت سیل {'✅ فعال' if not current else '❌ غیرفعال'} شد.", show_alert=False)
+    await cb_g_show(cq)
+
+
+@router.callback_query(F.data.startswith("admin_g_forcesub_"))
+async def cb_g_toggle_forcesub(cq: CallbackQuery):
+    if cq.from_user.id not in ADMIN_IDS:
+        return await cq.answer("❌ دسترسی نداری", show_alert=True)
+    chat_id = int(cq.data.split("_")[-1])
+    settings = await db.get_group_settings(chat_id)
+    current = settings.get("force_sub_enabled", False) if settings else False
+    await db.update_group_settings(chat_id, force_sub_enabled=int(not current))
+    await cq.answer(f"عضویت اجباری {'✅ فعال' if not current else '❌ غیرفعال'} شد.", show_alert=False)
     await cb_g_show(cq)@router.callback_query(F.data.startswith("admin_g_ghistory_"))
 async def cb_g_detail_history(cq: CallbackQuery):
     if cq.from_user.id not in ADMIN_IDS:

@@ -121,6 +121,13 @@ async def main():
             return
 
         if message.chat.type in ("group", "supergroup"):
+            settings = await db.get_group_settings(message.chat.id)
+            if settings and settings.get("force_sub_enabled"):
+                channel = settings.get("force_sub_channel", "")
+                if channel and not await force_sub.is_subscribed(message.bot, message.from_user.id, channel):
+                    return
+
+        if message.chat.type in ("group", "supergroup"):
             replies = await db.get_auto_replies(message.chat.id)
             for r in replies:
                 keyword = r["keyword"].lower()
