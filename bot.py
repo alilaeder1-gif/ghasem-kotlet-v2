@@ -231,6 +231,8 @@ async def main():
             await message.reply(response)
             return
 
+        if len(response) > 500:
+            response = response[:497] + "..."
         try:
             await message.reply(response)
             await db.save_chat(message.chat.id, message.from_user.id, user_msg, response)
@@ -317,6 +319,8 @@ async def main():
             if response.startswith("⚠") or response.startswith("⏳"):
                 await message.reply(response)
             else:
+                if len(response) > 500:
+                    response = response[:497] + "..."
                 await message.reply(f"🎤 {response}")
         except Exception as e:
             await message.reply(f"⚠️ خطا: {str(e)[:100]}")
