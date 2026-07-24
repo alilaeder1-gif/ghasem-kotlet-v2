@@ -107,7 +107,7 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
                 from handlers.ai_router import detect_intent
                 from handlers.provider_scorer import provider_scorer
                 intent = detect_intent(user_msg)
-                provider_scorer.record(provider, model, bool(response and not response.startswith(("⚠", "⏳"))), latency, intent)
+                await provider_scorer.record(provider, model, bool(response and not response.startswith(("⚠", "⏳"))), latency, intent)
             except: pass
             if not response or response.startswith(("⚠", "⏳")):
                 last_error = response
@@ -129,7 +129,7 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
             try:
                 from handlers.provider_scorer import provider_scorer
                 from handlers.ai_router import detect_intent
-                provider_scorer.record(c["provider"], c["model"], False, latency, detect_intent(user_msg))
+                await provider_scorer.record(c["provider"], c["model"], False, latency, detect_intent(user_msg))
             except: pass
             continue
 

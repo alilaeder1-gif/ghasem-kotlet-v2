@@ -130,8 +130,8 @@ async def _ai_classify(system_prompt: str, user_prompt: str) -> str:
         system_prompt=system_prompt,
         history=[],
         user_memory="",
-        qa_context="",
-        route=route_decision,
+        qa_context=[],
+        route_decision=route_decision,
         fallback_prompt=build_lite_prompt(),
     )
     return result or ""

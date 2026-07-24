@@ -795,7 +795,6 @@ async def cb_flag_toggle(cq: CallbackQuery):
     new_val = await feature_flags.toggle(flag)
     await cq.answer(f"{'✅' if new_val else '❌'} {flag}: {'ON' if new_val else 'OFF'}", show_alert=True)
     await cb_feature_flags(cq)
-    await cq.message.edit_text(f"✏️ **مقدار جدید برای `{key}`**", reply_markup=_back())
 
 # ═══════════════════════════════════════════
 # 10. MEMORY MANAGER
