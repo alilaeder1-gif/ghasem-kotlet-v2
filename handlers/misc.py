@@ -111,8 +111,6 @@ async def cmd_settings(message: Message):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     settings = await db.get_group_settings(message.chat.id)
-    if not settings:
-        return await message.reply("❌ خطا در دریافت تنظیمات.")
 
     def build_kb(s):
         b = InlineKeyboardBuilder()
@@ -162,7 +160,7 @@ async def settings_cb(cq):
 
     if action in toggles:
         key, val = toggles[action]
-        await db.update_group_settings(chat_id, **{key: int(val)})
+        await db.set_group_settings(chat_id, **{key: int(val)})
         await cq.answer(f"{'✅ فعال' if val else '❌ غیرفعال'} شد.", show_alert=False)
 
         s = await db.get_group_settings(chat_id)

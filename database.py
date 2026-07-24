@@ -437,19 +437,31 @@ class Database:
     async def get_group_settings(self, chat_id: int) -> dict | None:
         async with self.db.execute("SELECT * FROM group_settings WHERE chat_id = ?", (chat_id,)) as cursor:
             row = await cursor.fetchone()
-            if row:
+            if not row:
+                await self.db.execute("INSERT OR IGNORE INTO group_settings (chat_id) VALUES (?)", (chat_id,))
+                await self.db.commit()
                 return {
-                    "link_delete_enabled": bool(row["link_delete_enabled"]) if "link_delete_enabled" in row.keys() else False,
-                    "link_delete_delay": row["link_delete_delay"] if "link_delete_delay" in row.keys() else 0,
-                    "force_sub_channel": row["force_sub_channel"],
-                    "force_sub_enabled": bool(row["force_sub_enabled"]),
-                    "welcome_enabled": bool(row["welcome_enabled"]),
-                    "spam_protection": bool(row["spam_protection"]),
-                    "flood_protection": bool(row["flood_protection"]),
-                    "ai_chat_enabled": bool(row["ai_chat_enabled"]),
-                    "custom_title": row["custom_title"]
+                    "link_delete_enabled": False,
+                    "link_delete_delay": 0,
+                    "force_sub_channel": "",
+                    "force_sub_enabled": False,
+                    "welcome_enabled": True,
+                    "spam_protection": True,
+                    "flood_protection": True,
+                    "ai_chat_enabled": True,
+                    "custom_title": ""
                 }
-            return None
+            return {
+                "link_delete_enabled": bool(row["link_delete_enabled"]) if "link_delete_enabled" in row.keys() else False,
+                "link_delete_delay": row["link_delete_delay"] if "link_delete_delay" in row.keys() else 0,
+                "force_sub_channel": row["force_sub_channel"],
+                "force_sub_enabled": bool(row["force_sub_enabled"]),
+                "welcome_enabled": bool(row["welcome_enabled"]),
+                "spam_protection": bool(row["spam_protection"]),
+                "flood_protection": bool(row["flood_protection"]),
+                "ai_chat_enabled": bool(row["ai_chat_enabled"]),
+                "custom_title": row["custom_title"]
+            }
 
     async def get_user_memory(self, user_id: int, chat_id: int) -> str:
         async with self.db.execute("SELECT memory FROM user_memory WHERE user_id = ? AND chat_id = ?", (user_id, chat_id)) as cursor:
