@@ -17,7 +17,7 @@ async def on_user_join(event: ChatMemberUpdated):
         return
 
     welcome_text = settings["message"] if settings and settings["message"] else WELCOME_MESSAGE
-    welcome_text = welcome_text.replace("{name}", user.full_name).replace("{group}", event.chat.title)
+    welcome_text = welcome_text.replace("{name}", user.full_name).replace("{group}", event.chat.title).replace("{id}", str(user.id))
 
     try:
         await event.answer(welcome_text)
