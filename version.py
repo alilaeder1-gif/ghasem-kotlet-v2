@@ -1,28 +1,40 @@
 __version__ = "5.2.0"
 VERSION = "5.2.0"
 
-# Semantic Versioning Scheme
-# ===========================
+# Semantic Versioning Scheme (v5 — Field Test Phase)
+# ===================================================
 # v<major>.<minor>.<patch>
 #
-# MAJOR (v5.x.x): Major Personality Rewrite / Breaking Changes
+# MAJOR (vX.0.0): Major Personality Rewrite / Breaking Changes
 #   - Complete persona restructure
 #   - Breaking prompt format changes
 #   - New architecture
+#   - Phase transitions (e.g., Field Test → Production)
 #
-# MINOR (vx.1.x): Behavior Improvement
+# MINOR (v5.X.0): Feature Release
 #   - New persona modules
+#   - New capabilities (e.g., cultural knowledge, language expansion)
 #   - Evaluation improvements
 #   - Dataset additions
 #   - Scoring system changes
+#   - NO breaking changes to core personality
 #
-# PATCH (vx.x.1): Bug Fix / Tweak
+# PATCH (v5.0.X): Behavior Tweak
+#   - بهبود شوخی‌های تکراری
+#   - بهبود تشخیص احساسات
 #   - Bug fixes
 #   - Prompt tweaks
 #   - Small behavior adjustments
+#   - Based on personality_failures.md learnings
+#
+# Rule: هر بار کل شخصیت را زیر و رو نکن.
+# تغییرات کوچک → PATCH. تغییرات جدید → MINOR. بازنویسی → MAJOR.
 #
 # History:
-# v5.0.0 — Complete persona restructure + evaluation pack
+# v3.0.0 — Architecture Update
+# v4.0.0 — Behavior Improvement
+# v4.1.0 — Language Expansion
+# v5.0.0 — Complete persona restructure + evaluation pack (field test start)
 # v5.1.0 — Hallucination Guard, Developer Dashboard, Score Card, Datasets v1, Regression Test
 # v5.2.0 — Production Ready: Live Behavior Analytics, User Relationship Model,
 #           Character Evolution, Group Personality Modes, Quality Gate, Persona Signature
