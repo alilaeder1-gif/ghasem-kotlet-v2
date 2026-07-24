@@ -192,6 +192,21 @@ class Database:
             await self.db.commit()
         except:
             pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN ai_behavior TEXT DEFAULT 'default'")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN ai_tone TEXT DEFAULT 'tehrani'")
+            await self.db.commit()
+        except:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE group_settings ADD COLUMN ai_personality INTEGER DEFAULT 3")
+            await self.db.commit()
+        except:
+            pass
 
     async def set_welcome(self, chat_id: int, message: str | None = None, is_enabled: bool = True):
         await self.db.execute(
@@ -430,7 +445,7 @@ class Database:
             await self.db.execute("INSERT INTO group_settings (chat_id) VALUES (?)", (chat_id,))
         
         for key, value in kwargs.items():
-            if key in ["force_sub_channel", "force_sub_enabled", "welcome_enabled", "spam_protection", "flood_protection", "ai_chat_enabled", "custom_title", "link_delete_enabled", "link_delete_delay"]:
+            if key in ["force_sub_channel", "force_sub_enabled", "welcome_enabled", "spam_protection", "flood_protection", "ai_chat_enabled", "custom_title", "link_delete_enabled", "link_delete_delay", "ai_behavior", "ai_tone", "ai_personality"]:
                 await self.db.execute(f"UPDATE group_settings SET {key} = ? WHERE chat_id = ?", (value, chat_id))
         await self.db.commit()
 
@@ -443,6 +458,9 @@ class Database:
                 return {
                     "link_delete_enabled": False,
                     "link_delete_delay": 0,
+                    "ai_behavior": "default",
+                    "ai_tone": "tehrani",
+                    "ai_personality": 3,
                     "force_sub_channel": "",
                     "force_sub_enabled": False,
                     "welcome_enabled": True,
@@ -454,6 +472,9 @@ class Database:
             return {
                 "link_delete_enabled": bool(row["link_delete_enabled"]) if "link_delete_enabled" in row.keys() else False,
                 "link_delete_delay": row["link_delete_delay"] if "link_delete_delay" in row.keys() else 0,
+                "ai_behavior": row["ai_behavior"] if "ai_behavior" in row.keys() else "default",
+                "ai_tone": row["ai_tone"] if "ai_tone" in row.keys() else "tehrani",
+                "ai_personality": row["ai_personality"] if "ai_personality" in row.keys() else 3,
                 "force_sub_channel": row["force_sub_channel"],
                 "force_sub_enabled": bool(row["force_sub_enabled"]),
                 "welcome_enabled": bool(row["welcome_enabled"]),
