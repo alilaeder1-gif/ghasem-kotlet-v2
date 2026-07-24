@@ -282,6 +282,11 @@ class Database:
                 granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (chat_id, user_id)
             );
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         """)
         await self.db.commit()
         try:
@@ -717,6 +722,18 @@ class Database:
             f"INSERT INTO personality_sliders (chat_id, {slider}) VALUES (?, ?) "
             f"ON CONFLICT(chat_id) DO UPDATE SET {slider} = excluded.{slider}",
             (chat_id, value)
+        )
+        await self.db.commit()
+
+    async def get_setting(self, key: str, default: str = "") -> str:
+        async with self.db.execute("SELECT value FROM bot_settings WHERE key = ?", (key,)) as cursor:
+            row = await cursor.fetchone()
+            return row["value"] if row else default
+
+    async def set_setting(self, key: str, value: str):
+        await self.db.execute(
+            "INSERT OR REPLACE INTO bot_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+            (key, value)
         )
         await self.db.commit()
 

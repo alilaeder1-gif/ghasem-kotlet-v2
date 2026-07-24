@@ -32,6 +32,7 @@ from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, _get
 from handlers.key_pool import groq_pool, openrouter_pool
 from handlers.ai_gateway import smart_route, daily_usage, health_score, make_tiers, TokenBudget
 from handlers.token_estimator import estimate_tokens
+from handlers.admin_panel import record_request, record_error
 from handlers import response_quality as rq_mod
 from handlers import response_judge as judge_mod
 from handlers import cost_optimizer as cost_mod
@@ -97,24 +98,31 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
         candidates = [{"provider": "gemini", "model": "gemini-2.0-flash", "tier": "full", "pool": "gemini"}]
 
     for c in candidates:
+        import time as _time
+        _t0 = _time.time()
         try:
             provider, model, tier = c["provider"], c["model"], c["tier"]
             hist_count = 6 if tier == "full" else (2 if tier == "lite" else 1)
             compressed = TokenBudget.select_history(estimate_tokens(tiers[tier] or ""), history, tier)
             logger.debug(f"ask_with_routing: {provider}/{model} -> {tier} tier ({len(compressed)} msgs)")
             response = await _try_provider(provider, model, tiers[tier] or "", user_msg, compressed, hist_count)
+            latency = _time.time() - _t0
             if not response or response.startswith(("⚠", "⏳")):
                 last_error = response
-                health_score.record(model, False)
+                health_score.record(model, False, latency)
+                record_error(provider, model, str(response)[:60])
                 continue
-            health_score.record(model, True)
+            health_score.record(model, True, latency)
             daily_usage.record(f"{provider}:{model}", estimate_tokens(response))
+            record_request(latency)
             if rq_mod.needs_failover(response, user_msg, ""):
                 continue
             return response
         except Exception as e:
+            latency = _time.time() - _t0
             last_error = str(e)
-            health_score.record(c["model"], False)
+            health_score.record(c["model"], False, latency)
+            record_error(c["provider"], c["model"], str(e))
             continue
 
     return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
