@@ -333,22 +333,25 @@ async def show_welcome_settings(msg_or_cq, chat_id):
         f"👋 **تنظیمات خوشامدگویی**\n"
         f"╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n"
         f"وضعیت: {'🟢 فعال' if enabled else '🔴 غیرفعال'}\n\n"
-        f"وقتی کاربر جدید به گروه میاد، پیام خوشامد براش فرستاده میشه.\n\n"
         f"📝 **پیام فعلی:**\n"
         f"`{msg_text[:200]}`\n\n"
-        f"📌 **متغیرهای قابل استفاده:**\n"
-        f"• `{{{{name}}}}` - اسم کاربر\n"
-        f"• `{{{{group}}}}` - اسم گروه\n"
-        f"• `{{{{id}}}}` - آیدی کاربر\n\n"
-        f"📎 **روش تنظیم:**\n"
-        f"• با دکمه زیر پیام جدید بنویس\n"
-        f"• یا دستور `/setwelcome`"
+        f"📌 **متغیرها:** `{{name}}` اسم | `{{group}}` گروه | `{{id}}` آیدی\n\n"
+        f"👇 **روی یکی از قالب‌های آماده بزن** یا خودت بنویس:"
     )
+    WELCOME_TEMPLATES = [
+        ("سلام {name}! خوش اومدی به {group} 👋", "👋 ساده"),
+        ("سلام {name} جوون! به گروه {group} خوش اومدی 😎", "😎 جوونی"),
+        ("🥳 {name} عزیز به گروه {group} خوش اومدی!\nحتما قوانین رو با /rules بخون.", "🥳 رسمی"),
+        ("سلام {name}! 😊\nبه جمع ما تو {group} خوش اومدی.\nاز فعالیتت لذت ببر! 🌟", "😊 گرم"),
+        ("خوش اومدی {name} جان! 🎉\nبه گروه {group} خوش اومدی.\nاگه سوالی داری بپرس.", "🎉 خودمونی"),
+    ]
     b = InlineKeyboardBuilder()
-    b.button(text="✏️ ویرایش متن خوشامد", callback_data=f"sp|welcome_edit|{chat_id}")
+    for tmpl, label in WELCOME_TEMPLATES:
+        b.button(text=label, callback_data=f"sp|welcome_template|{WELCOME_TEMPLATES.index((tmpl, label))}|{chat_id}")
+    b.button(text="✏️ نوشتن متن دلخواه", callback_data=f"sp|welcome_edit|{chat_id}")
     b.button(text=f"{'🔴 غیرفعال' if enabled else '🟢 فعال'} کردن خوشامدگویی", callback_data=f"sp|welcome_onoff|{chat_id}")
     b.button(text="🔙 بازگشت به تنظیمات", callback_data=f"sp|main|{chat_id}")
-    b.adjust(1)
+    b.adjust(2)
     await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
 
 
@@ -568,6 +571,22 @@ async def settings_panel_cb(cq: CallbackQuery):
         await db.set_group_settings(chat_id, welcome_enabled=int(not cur))
         await cq.answer(f"{'🟢 فعال' if not cur else '🔴 غیرفعال'} شد ✅", show_alert=False)
         await show_welcome_settings(cq, chat_id)
+        return
+
+    if action == "welcome_template":
+        idx = int(parts[2])
+        WELCOME_TEMPLATES = [
+            "سلام {name}! خوش اومدی به {group} 👋",
+            "سلام {name} جوون! به گروه {group} خوش اومدی 😎",
+            "🥳 {name} عزیز به گروه {group} خوش اومدی!\nحتما قوانین رو با /rules بخون.",
+            "سلام {name}! 😊\nبه جمع ما تو {group} خوش اومدی.\nاز فعالیتت لذت ببر! 🌟",
+            "خوش اومدی {name} جان! 🎉\nبه گروه {group} خوش اومدی.\nاگه سوالی داری بپرس.",
+        ]
+        if 0 <= idx < len(WELCOME_TEMPLATES):
+            await db.set_welcome(chat_id, WELCOME_TEMPLATES[idx], True)
+            await db.set_group_settings(chat_id, welcome_enabled=1)
+            await cq.answer(f"✅ قالب {idx+1} ذخیره شد!", show_alert=False)
+            await show_welcome_settings(cq, chat_id)
         return
 
     if action == "link_onoff":
