@@ -692,13 +692,18 @@ async def settings_panel_cb(cq: CallbackQuery):
     if action == "welcome_edit":
         _pending[cq.from_user.id] = ("welcome_text", chat_id)
         await cq.message.reply(
-            f"✏️ **متن جدید خوشامد رو بفرست.**\n\n"
-            f"می‌تونی از این متغیرها استفاده کنی:\n"
-            f"`{{name}}` - اسم کاربر\n"
-            f"`{{group}}` - اسم گروه\n"
-            f"`{{id}}` - آیدی کاربر\n\n"
-            f"مثال: `سلام {{{{name}}}}! خوش اومدی به {{{{group}}}} 👋`\n\n"
-            f"برای لغو، /cancel بزن."
+            f"✏️ **مراحل ویرایش متن خوشامد:**\n"
+            f"╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\n"
+            f"**مرحله ۱:**\n"
+            f"متن دلخواهت رو توی یک پیام بنویس و بفرست.\n\n"
+            f"**مرحله ۲:**\n"
+            f"به جای نام کاربر از `{{name}}` استفاده کن\n"
+            f"به جای نام گروه از `{{group}}` استفاده کن\n"
+            f"به جای آیدی کاربر از `{{id}}` استفاده کن\n\n"
+            f"**مثال:**\n"
+            f"`سلام {name}! به {group} خوش اومدی 😊`\n\n"
+            f"**نکته:** اگه متغیر نخوای، فقط متن ساده بفرست.\n"
+            f"برای لغو دستور /cancel رو بفرست."
         )
         return
 
@@ -757,7 +762,16 @@ async def settings_text_handler(message: Message):
         await db.set_welcome(chat_id, message.text, True)
         await db.set_group_settings(chat_id, welcome_enabled=1)
         del _pending[message.from_user.id]
-        await message.reply("✅ **پیام خوشامد تنظیم شد.**", reply_to_message_id=message.message_id)
+        preview = message.text.replace("{name}", message.from_user.full_name).replace("{group}", "نام گروه").replace("{id}", str(message.from_user.id))
+        await message.reply(
+            f"✅ **متن خوشامد ذخیره شد!**\n\n"
+            f"📝 **متنی که ذخیره شد:**\n"
+            f"`{message.text[:200]}`\n\n"
+            f"👁 **پیش‌نمایش:**\n"
+            f"{preview[:200]}\n\n"
+            f"از پنل تنظیمات می‌تونی تغییرش بدی 👈 /settings",
+            reply_to_message_id=message.message_id
+        )
         return
 
     if action == "forcesub_add":
