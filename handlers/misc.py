@@ -110,33 +110,55 @@ async def cmd_settings(message: Message):
     from database import db
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-    settings = await db.get_group_settings(message.chat.id)
+    s = await db.get_group_settings(message.chat.id)
 
-    def build_kb(s):
+    def build_kb(st):
         b = InlineKeyboardBuilder()
-        ai = s.get("ai_chat_enabled", True)
-        sp = s.get("spam_protection", True)
-        fl = s.get("flood_protection", True)
-        wl = s.get("welcome_enabled", True)
-        ld = s.get("link_delete_enabled", False)
-        fs = s.get("force_sub_enabled", False)
-        b.button(text=f"{'✅' if ai else '❌'} هوش", callback_data=f"sett_ai_{message.chat.id}")
-        b.button(text=f"{'✅' if sp else '❌'} اسپم", callback_data=f"sett_spam_{message.chat.id}")
-        b.button(text=f"{'✅' if fl else '❌'} سیل", callback_data=f"sett_flood_{message.chat.id}")
-        b.button(text=f"{'✅' if wl else '❌'} خوشامد", callback_data=f"sett_welcome_{message.chat.id}")
-        b.button(text=f"{'✅' if ld else '❌'} لینک", callback_data=f"sett_linkdel_{message.chat.id}")
-        b.button(text=f"{'✅' if fs else '❌'} اجباری", callback_data=f"sett_forcesub_{message.chat.id}")
+        ai = st.get("ai_chat_enabled", True)
+        sp = st.get("spam_protection", True)
+        fl = st.get("flood_protection", True)
+        wl = st.get("welcome_enabled", True)
+        ld = st.get("link_delete_enabled", False)
+        fs = st.get("force_sub_enabled", False)
+        b.button(text=f"{'🟢' if ai else '🔴'} هوش مصنوعی", callback_data=f"sett|ai|{message.chat.id}")
+        b.button(text=f"{'🟢' if sp else '🔴'} محافظت اسپم", callback_data=f"sett|spam|{message.chat.id}")
+        b.button(text=f"{'🟢' if fl else '🔴'} محافظت سیل", callback_data=f"sett|flood|{message.chat.id}")
+        b.button(text=f"{'🟢' if wl else '🔴'} خوشامدگویی", callback_data=f"sett|welcome|{message.chat.id}")
+        b.button(text=f"{'🟢' if ld else '🔴'} حذف خودکار لینک", callback_data=f"sett|linkdel|{message.chat.id}")
+        b.button(text=f"{'🟢' if fs else '🔴'} عضویت اجباری", callback_data=f"sett|forcesub|{message.chat.id}")
         b.adjust(2)
         return b.as_markup()
 
-    await message.reply("⚙️ **تنظیمات گروه**\nروی دکمه بزن تا تغییر کنه.", reply_markup=build_kb(settings))
+    def status_text(st):
+        return (
+            f"⚙️ **پنل تنظیمات گروه**\n\n"
+            f"🤖 **هوش مصنوعی:** {'✅ فعال' if st.get('ai_chat_enabled', True) else '❌ غیرفعال'}\n"
+            f"   کتلت به سوالات هوشمند جواب میده\n\n"
+            f"🛡 **محافظت اسپم:** {'✅ فعال' if st.get('spam_protection', True) else '❌ غیرفعال'}\n"
+            f"   تشخیص و حذف پیام‌های اسپم\n\n"
+            f"🌊 **محافظت سیل:** {'✅ فعال' if st.get('flood_protection', True) else '❌ غیرفعال'}\n"
+            f"   جلوگیری از پیام‌های پشت سر هم\n\n"
+            f"👋 **خوشامدگویی:** {'✅ فعال' if st.get('welcome_enabled', True) else '❌ غیرفعال'}\n"
+            f"   پیام خوشامد به اعضای جدید\n\n"
+            f"🔗 **حذف خودکار لینک:** {'✅ فعال' if st.get('link_delete_enabled', False) else '❌ غیرفعال'}\n"
+            f"   حذف لینک‌های کاربران (قابل تنظیم با /linkdelete)\n\n"
+            f"📢 **عضویت اجباری:** {'✅ فعال' if st.get('force_sub_enabled', False) else '❌ غیرفعال'}\n"
+            f"   کاربران باید عضو کانال بشن\n\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"روی هر دکمه بزن تا وضعیت تغییر کنه 👇"
+        )
+
+    await message.reply(status_text(s), reply_markup=build_kb(s))
 
 
-@router.callback_query(F.data.startswith("sett_"))
+@router.callback_query(F.data.startswith("sett|"))
 async def settings_cb(cq):
     from database import db
-    chat_id = int(cq.data.split("_")[-1])
-    action = cq.data.rsplit("_", 2)[1]
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    parts = cq.data.split("|")
+    action = parts[1]
+    chat_id = int(parts[2])
 
     try:
         chat_member = await cq.bot.get_chat_member(chat_id, cq.from_user.id)
@@ -146,8 +168,6 @@ async def settings_cb(cq):
         return await cq.answer("❌ خطا", show_alert=True)
 
     s = await db.get_group_settings(chat_id)
-    if not s:
-        return
 
     toggles = {
         "ai": ("ai_chat_enabled", not s.get("ai_chat_enabled", True)),
@@ -158,20 +178,43 @@ async def settings_cb(cq):
         "forcesub": ("force_sub_enabled", not s.get("force_sub_enabled", False)),
     }
 
-    if action in toggles:
-        key, val = toggles[action]
-        await db.set_group_settings(chat_id, **{key: int(val)})
-        await cq.answer(f"{'✅ فعال' if val else '❌ غیرفعال'} شد.", show_alert=False)
+    if action not in toggles:
+        return await cq.answer("❌", show_alert=True)
 
-        s = await db.get_group_settings(chat_id)
-        def build_kb(s):
-            b = InlineKeyboardBuilder()
-            b.button(text=f"{'✅' if s.get('ai_chat_enabled', True) else '❌'} هوش", callback_data=f"sett_ai_{chat_id}")
-            b.button(text=f"{'✅' if s.get('spam_protection', True) else '❌'} اسپم", callback_data=f"sett_spam_{chat_id}")
-            b.button(text=f"{'✅' if s.get('flood_protection', True) else '❌'} سیل", callback_data=f"sett_flood_{chat_id}")
-            b.button(text=f"{'✅' if s.get('welcome_enabled', True) else '❌'} خوشامد", callback_data=f"sett_welcome_{chat_id}")
-            b.button(text=f"{'✅' if s.get('link_delete_enabled', False) else '❌'} لینک", callback_data=f"sett_linkdel_{chat_id}")
-            b.button(text=f"{'✅' if s.get('force_sub_enabled', False) else '❌'} اجباری", callback_data=f"sett_forcesub_{chat_id}")
-            b.adjust(2)
-            return b.as_markup()
-        await cq.message.edit_reply_markup(reply_markup=build_kb(s))
+    key, val = toggles[action]
+    await db.set_group_settings(chat_id, **{key: int(val)})
+    await cq.answer(f"{'🟢 فعال' if val else '🔴 غیرفعال'} شد ✅", show_alert=False)
+
+    s = await db.get_group_settings(chat_id)
+
+    def build_kb(st):
+        b = InlineKeyboardBuilder()
+        b.button(text=f"{'🟢' if st.get('ai_chat_enabled', True) else '🔴'} هوش مصنوعی", callback_data=f"sett|ai|{chat_id}")
+        b.button(text=f"{'🟢' if st.get('spam_protection', True) else '🔴'} محافظت اسپم", callback_data=f"sett|spam|{chat_id}")
+        b.button(text=f"{'🟢' if st.get('flood_protection', True) else '🔴'} محافظت سیل", callback_data=f"sett|flood|{chat_id}")
+        b.button(text=f"{'🟢' if st.get('welcome_enabled', True) else '🔴'} خوشامدگویی", callback_data=f"sett|welcome|{chat_id}")
+        b.button(text=f"{'🟢' if st.get('link_delete_enabled', False) else '🔴'} حذف خودکار لینک", callback_data=f"sett|linkdel|{chat_id}")
+        b.button(text=f"{'🟢' if st.get('force_sub_enabled', False) else '🔴'} عضویت اجباری", callback_data=f"sett|forcesub|{chat_id}")
+        b.adjust(2)
+        return b.as_markup()
+
+    def status_text(st):
+        return (
+            f"⚙️ **پنل تنظیمات گروه**\n\n"
+            f"🤖 **هوش مصنوعی:** {'✅ فعال' if st.get('ai_chat_enabled', True) else '❌ غیرفعال'}\n"
+            f"   کتلت به سوالات هوشمند جواب میده\n\n"
+            f"🛡 **محافظت اسپم:** {'✅ فعال' if st.get('spam_protection', True) else '❌ غیرفعال'}\n"
+            f"   تشخیص و حذف پیام‌های اسپم\n\n"
+            f"🌊 **محافظت سیل:** {'✅ فعال' if st.get('flood_protection', True) else '❌ غیرفعال'}\n"
+            f"   جلوگیری از پیام‌های پشت سر هم\n\n"
+            f"👋 **خوشامدگویی:** {'✅ فعال' if st.get('welcome_enabled', True) else '❌ غیرفعال'}\n"
+            f"   پیام خوشامد به اعضای جدید\n\n"
+            f"🔗 **حذف خودکار لینک:** {'✅ فعال' if st.get('link_delete_enabled', False) else '❌ غیرفعال'}\n"
+            f"   حذف لینک‌های کاربران (قابل تنظیم با /linkdelete)\n\n"
+            f"📢 **عضویت اجباری:** {'✅ فعال' if st.get('force_sub_enabled', False) else '❌ غیرفعال'}\n"
+            f"   کاربران باید عضو کانال بشن\n\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"روی هر دکمه بزن تا وضعیت تغییر کنه 👇"
+        )
+
+    await cq.message.edit_text(status_text(s), reply_markup=build_kb(s))
