@@ -178,6 +178,8 @@ async def main():
     dp.include_router(force_sub.router)
     dp.include_router(fun.router)
     dp.include_router(settings_panel.router)
+    from handlers.admin_panel import router as admin_panel_router
+    dp.include_router(admin_panel_router)
 
     asyncio.create_task(reminder_worker())
 
