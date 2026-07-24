@@ -264,20 +264,29 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                     break
 
     if not response:
-        # Fallback: retry with smaller prompt if context overflow
+        fallbacks = []
         if fallback_prompt and fallback_prompt != prompt:
-            logger.info("All models failed — retrying with lite prompt")
+            fallbacks.append((fallback_prompt, 2))
+        try:
+            from handlers.personality_core import build_micro_prompt
+            micro = build_micro_prompt()
+            if micro and micro != (fallback_prompt or prompt):
+                fallbacks.append((micro, 1))
+        except Exception:
+            pass
+        for fb_prompt, hist_count in fallbacks:
+            logger.info(f"Fallback to reduced prompt ({len(fb_prompt)} chars, {hist_count} history)")
             if GEMINI_KEYS:
-                response = await asyncio.to_thread(_call_google, user_message, fallback_prompt + SEARCH_INSTRUCTION, chat_history)
+                response = await asyncio.to_thread(_call_google, user_message, fb_prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
-                response = await asyncio.to_thread(_call_deepseek, user_message, fallback_prompt + SEARCH_INSTRUCTION, chat_history)
+                response = await asyncio.to_thread(_call_deepseek, user_message, fb_prompt + SEARCH_INSTRUCTION, chat_history)
             if not response:
                 or_result = _get_openrouter()
                 if or_result:
                     or_client, or_key = or_result
-                    messages = [{"role": "system", "content": fallback_prompt + SEARCH_INSTRUCTION}]
+                    messages = [{"role": "system", "content": fb_prompt + SEARCH_INSTRUCTION}]
                     if chat_history:
-                        for msg in chat_history[-6:]:
+                        for msg in chat_history[-hist_count:]:
                             role = "user" if msg.get("role") == "user" else "assistant"
                             messages.append({"role": role, "content": msg.get("content", "")})
                     messages.append({"role": "user", "content": user_message})
@@ -286,6 +295,8 @@ async def ask_ai(user_message: str, system_prompt: str = None, chat_history: lis
                         if result is not None and not result.startswith("⚠"):
                             response = result
                             break
+            if response:
+                break
         if not response:
             return "⚠️ خطا: همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 

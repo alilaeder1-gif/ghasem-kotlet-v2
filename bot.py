@@ -14,7 +14,7 @@ from cache import cache
 from handlers import admin, welcome, rules, spam, misc, custom, persona, group_tracker, force_sub, fun, admin_bot, persian_cmds, settings_panel
 from middlewares.anti_flood import AntiFloodMiddleware
 from handlers.ai_chat import ask_ai, extract_memory, split_sentences, detect_emotion
-from handlers.personality_core import build_persona_prompt
+from handlers.personality_core import build_persona_prompt, build_micro_prompt
 from handlers.fun import reminder_worker
 from handlers import user_relationships as rel_mod
 from handlers import analytics as analytics_mod
@@ -50,60 +50,63 @@ async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: 
     return base
 
 
+async def _try_provider(provider: str, model: str, system_prompt: str, user_msg: str, history: list, history_count: int = 6) -> str | None:
+    if provider == "gemini":
+        return await asyncio.to_thread(_call_google, user_msg, system_prompt, history)
+    from handlers.ai_chat import _call_groq
+    if provider == "groq":
+        from handlers.ai_chat import _get_groq
+        from handlers.key_pool import groq_pool
+        gr = _get_groq()
+        if not gr:
+            return None
+        client, key = gr
+    elif provider == "openrouter":
+        from handlers.ai_chat import _get_openrouter
+        from handlers.key_pool import openrouter_pool
+        or_r = _get_openrouter()
+        if not or_r:
+            return None
+        client, key = or_r
+    else:
+        return None
+    messages = [{"role": "system", "content": system_prompt}]
+    if history:
+        for msg in history[-history_count:]:
+            role = "user" if msg.get("role") == "user" else "assistant"
+            messages.append({"role": role, "content": msg.get("content", "")})
+    messages.append({"role": "user", "content": user_msg})
+    pool = groq_pool if provider == "groq" else openrouter_pool
+    return _call_groq(client, model, messages, pool, key)
+
+
 async def ask_with_routing(user_msg: str, system_prompt: str, history: list, user_memory: str, qa_context: list, route_decision: router_mod.RouteDecision, fallback_prompt: str = None) -> str:
     failover_chain = router_mod.get_failover_chain(route_decision)
+    micro_prompt = build_micro_prompt()
     last_error = None
-    for provider, model in failover_chain:
-        try:
-            if provider == "gemini":
-                response = await asyncio.to_thread(_call_google, user_msg, system_prompt, history)
-            elif provider == "groq":
-                from handlers.ai_chat import _get_groq
-                gr = _get_groq()
-                if not gr:
+
+    for cycle, (prompt, hist_count) in enumerate([
+        (system_prompt, 6),
+        (fallback_prompt or system_prompt, 2),
+        (micro_prompt, 1),
+    ]):
+        if cycle > 0 and last_error and "CONTEXT_OVERFLOW" not in str(last_error):
+            break
+        if cycle > 0:
+            logger.info(f"Fallback cycle {cycle}: using reduced prompt ({len(prompt)} chars, {hist_count} history)")
+        for provider, model in failover_chain:
+            try:
+                response = await _try_provider(provider, model, prompt, user_msg, history, hist_count)
+                if not response or response.startswith(("⚠", "⏳")):
+                    last_error = response
                     continue
-                client, key = gr
-                messages = [{"role": "system", "content": system_prompt}]
-                if history:
-                    for msg in history[-6:]:
-                        role = "user" if msg.get("role") == "user" else "assistant"
-                        messages.append({"role": role, "content": msg.get("content", "")})
-                messages.append({"role": "user", "content": user_msg})
-                from handlers.ai_chat import _call_groq
-                from handlers.key_pool import groq_pool
-                response = _call_groq(client, model, messages, groq_pool, key)
-            elif provider == "openrouter":
-                or_r = _get_openrouter()
-                if not or_r:
+                if rq_mod.needs_failover(response, user_msg, ""):
                     continue
-                client, key = or_r
-                messages = [{"role": "system", "content": system_prompt}]
-                if history:
-                    for msg in history[-6:]:
-                        role = "user" if msg.get("role") == "user" else "assistant"
-                        messages.append({"role": role, "content": msg.get("content", "")})
-                messages.append({"role": "user", "content": user_msg})
-                from handlers.ai_chat import _call_groq
-                from handlers.key_pool import openrouter_pool
-                response = _call_groq(client, model, messages, openrouter_pool, key)
-            else:
+                return response
+            except Exception as e:
+                last_error = str(e)
                 continue
-            if not response or response.startswith(("⚠", "⏳")):
-                last_error = response
-                # If context overflow, retry with lite prompt
-                if response and "CONTEXT_OVERFLOW" in response and fallback_prompt:
-                    logger.info("Context overflow detected, retrying with lite prompt")
-                    from handlers.ai_chat import _call_google as _cg
-                    retry = await asyncio.to_thread(_cg, user_msg, fallback_prompt, history)
-                    if retry and not retry.startswith(("⚠", "⏳")):
-                        return retry
-                continue
-            if rq_mod.needs_failover(response, user_msg, ""):
-                continue
-            return response
-        except Exception as e:
-            last_error = str(e)
-            continue
+
     return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
 
 

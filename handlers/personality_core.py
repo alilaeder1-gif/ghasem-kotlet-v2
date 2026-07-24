@@ -184,12 +184,26 @@ _LITE_MODULES = [
     "PERSONALITY_BLEND", "QUALITY_GATE", "PERSONA_SIGNATURE",
 ]
 
+_MICRO_MODULES = [
+    "PERSONA_HEADER", "BEHAVIOR", "CONFIDENCE",
+    "ANTI_CRINGE", "PERSONALITY_BLEND",
+]
+
 
 def build_lite_prompt() -> str:
     parts = [_resolve(m) for m in _LITE_MODULES if _resolve(m)]
     parts.append(
         "## قانون نهايي\n"
         "هميشه كوتاه جواب بده. حداكثر ۱-۲ جمله. از اموجي كم و هوشمندانه استفاده كن."
+    )
+    return "\n\n".join(parts)
+
+
+def build_micro_prompt() -> str:
+    parts = [_resolve(m) for m in _MICRO_MODULES if _resolve(m)]
+    parts.append(
+        "## قانون نهايي\n"
+        "هميشه كوتاه جواب بده. حداكثر ۱-۲ جمله."
     )
     return "\n\n".join(parts)
 
