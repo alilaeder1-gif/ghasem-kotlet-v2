@@ -2,7 +2,6 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
 from database import db
-from config import ADMIN_IDS
 from handlers.ai_chat import ask_code
 
 router = Router()

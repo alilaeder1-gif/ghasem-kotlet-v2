@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.filters import Command
 from database import db
 from config import ADMIN_IDS
 from handlers.admin_panel import _main_kb, _ensure_pin, _show_dashboard, _check_session
@@ -50,7 +51,7 @@ async def _group_list_kb(action: str, page: int = 0) -> InlineKeyboardMarkup:
 
 # ─── منوی اصلی ───
 
-@router.message(F.text == "/ghasemkotlet")
+@router.message(Command("ghasemkotlet"))
 async def admin_menu(message: Message):
     if message.chat.type != "private": return
     if message.from_user.id not in ADMIN_IDS: return

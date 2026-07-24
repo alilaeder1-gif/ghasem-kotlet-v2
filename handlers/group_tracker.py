@@ -2,6 +2,7 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, ChatMemberUpdated, Chat
 from aiogram.filters import ChatMemberUpdatedFilter, Command
 from database import db
+from handlers.permissions import is_global_admin
 
 router = Router()
 
@@ -41,7 +42,7 @@ async def track_group(message: Message):
 
 @router.message(Command("sync"))
 async def sync_groups(message: Message):
-    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+    if not is_global_admin(message.from_user.id):
         return await message.reply("فقط ادمین اصلی می‌تونه این کار رو بکنه.")
 
     await track_group(message)
@@ -83,7 +84,7 @@ async def on_bot_removed(event: ChatMemberUpdated):
 
 @router.message(Command("mygroups"))
 async def my_groups(message: Message):
-    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+    if not is_global_admin(message.from_user.id):
         return await message.reply("فقط ادمین اصلی می‌تونه این دستور رو بزنه.")
 
     groups = await db.get_all_groups()
@@ -98,7 +99,7 @@ async def my_groups(message: Message):
 
 @router.message(Command("broadcast"))
 async def broadcast(message: Message):
-    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+    if not is_global_admin(message.from_user.id):
         return await message.reply("فقط ادمین اصلی می‌تونه این دستور رو بزنه.")
 
     text = message.text.replace("/broadcast", "").strip()

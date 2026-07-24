@@ -3,6 +3,7 @@ import aiosqlite
 import os
 import re
 import logging
+from datetime import datetime, timezone
 from config import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
@@ -328,6 +329,14 @@ class Database:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS offline_answers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                intent TEXT NOT NULL,
+                triggers TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                priority INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
             INSERT OR IGNORE INTO providers (name) VALUES ('gemini');
             INSERT OR IGNORE INTO providers (name) VALUES ('groq');
             INSERT OR IGNORE INTO providers (name) VALUES ('openrouter');
@@ -335,6 +344,44 @@ class Database:
             INSERT OR IGNORE INTO providers (name) VALUES ('sambanova');
             INSERT OR IGNORE INTO providers (name) VALUES ('cloudflare');
             INSERT OR IGNORE INTO providers (name) VALUES ('deepinfra');
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('greeting', 'سلام,درود,هی,hi,hello,سلا م,salam', 'سلام داداش! چطوری؟ 😎', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('farewell', 'خداحافظ,فعلا,بای,bye,می‌رم,برم', 'فعلاً... بعداً می‌بینمت! 🤙', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('help', 'کمک,راهنما,چی کار می‌کنی,چه کارا,help,دستور', 'من کتلت‌م! می‌تونم باهات حرف بزنم، شوخی کنم، سوالات عمومی رو جواب بدم. تو گروه /ghasemkotlet رو به ادمین بگو تا پنل مدیریت رو ببینه.', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('name', 'اسمت چیه,اسم تو,تو کی هستی,who are you,معرفی', 'من کتلت هستم 🤖 رفیق باحال گروه!', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('creator', 'کی ساختت,سازنده,سازندت,کی تو رو,who made', 'تیم ما من رو ساختن! یه تیم باحال از برنامه‌نویس‌ها. 😎', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('mood', 'چطوری,حالت,خوبی,چی کار می‌کنی,چه خبر,اوضاع', 'دمتم گرم داداش! فقط دارم کم کم کُتلت می‌شم 😂', 1);
+            INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('time', 'ساعت,ساعت چنده,time,what time', 'الان وقتش نیست! ولی هر وقت باشی من آماده‌ام 😎', 2);
+            CREATE TABLE IF NOT EXISTS ai_cache (
+                question_hash TEXT PRIMARY KEY,
+                answer TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS ai_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                question TEXT,
+                answer TEXT,
+                provider TEXT DEFAULT '',
+                latency REAL DEFAULT 0,
+                response_type TEXT DEFAULT 'ai',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        # Migration: add intent_id to offline_answers
+        try:
+            await self.db.execute("ALTER TABLE offline_answers ADD COLUMN intent_id INTEGER DEFAULT 0")
+        except Exception:
+            pass  # column already exists
+        # Unanswered questions queue
+        await self.db.execute("""
+            CREATE TABLE IF NOT EXISTS unanswered_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                user_id INTEGER,
+                chat_id INTEGER,
+                asked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'pending'
+            )
         """)
         await self.db.commit()
 
@@ -475,6 +522,53 @@ class Database:
                 await self.db.commit()
             except:
                 pass
+
+        # user_ai_count migration
+        try:
+            await self.db.execute("ALTER TABLE group_users ADD COLUMN ai_usage_count INTEGER DEFAULT 0")
+            await self.db.commit()
+        except: pass
+
+        # roles table
+        try:
+            await self.db.executescript("""
+                CREATE TABLE IF NOT EXISTS user_roles (
+                    user_id INTEGER NOT NULL,
+                    chat_id INTEGER NOT NULL DEFAULT 0,
+                    role TEXT NOT NULL DEFAULT 'user',
+                    assigned_by INTEGER DEFAULT 0,
+                    assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, chat_id)
+                );
+                CREATE TABLE IF NOT EXISTS admin_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    chat_id INTEGER,
+                    action TEXT NOT NULL,
+                    target_id INTEGER DEFAULT 0,
+                    reason TEXT DEFAULT '',
+                    details TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS health_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service TEXT NOT NULL,
+                    result TEXT NOT NULL,
+                    checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS provider_daily_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    success_count INTEGER DEFAULT 0,
+                    failure_count INTEGER DEFAULT 0,
+                    total_time REAL DEFAULT 0,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(date, provider)
+                );
+            """)
+            await self.db.commit()
+        except: pass
 
         # API keys migration (v5.7.0)
         for col in ["tokens_today", "failure_count"]:
@@ -915,6 +1009,301 @@ class Database:
     async def get_faq_list(self) -> list[dict]:
         try:
             async with self.db.execute("SELECT id, question, answer FROM knowledge_base WHERE source = 'faq' ORDER BY usage_count DESC") as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
+
+    # ─── Offline Answers ───
+
+    async def get_all_offline_answers(self) -> list[dict]:
+        try:
+            async with self.db.execute("SELECT * FROM offline_answers ORDER BY priority, intent") as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
+
+    async def add_offline_answer(self, intent: str, triggers: str, answer: str, priority: int = 1):
+        await self.db.execute(
+            "INSERT INTO offline_answers (intent, triggers, answer, priority) VALUES (?, ?, ?, ?)",
+            (intent.strip(), triggers.strip(), answer.strip(), priority)
+        )
+        await self.db.commit()
+
+    async def update_offline_answer(self, aid: int, intent: str, triggers: str, answer: str, priority: int = 1):
+        await self.db.execute(
+            "UPDATE offline_answers SET intent=?, triggers=?, answer=?, priority=? WHERE id=?",
+            (intent.strip(), triggers.strip(), answer.strip(), priority, aid)
+        )
+        await self.db.commit()
+
+    async def delete_offline_answer(self, aid: int):
+        await self.db.execute("DELETE FROM offline_answers WHERE id=?", (aid,))
+        await self.db.commit()
+
+    async def get_offline_answer_by_intent(self, intent_name: str) -> str | None:
+        try:
+            async with self.db.execute(
+                "SELECT answer FROM offline_answers WHERE intent = ? LIMIT 1", (intent_name,)
+            ) as c:
+                row = await c.fetchone()
+                return row["answer"] if row else None
+        except:
+            return None
+
+    async def get_offline_answer_by_intent_id(self, intent_id: int) -> str | None:
+        try:
+            async with self.db.execute(
+                "SELECT answer FROM offline_answers WHERE intent_id = ? LIMIT 1", (intent_id,)
+            ) as c:
+                row = await c.fetchone()
+                return row["answer"] if row else None
+        except:
+            return None
+
+    async def add_unanswered(self, question: str, user_id: int, chat_id: int):
+        await self.db.execute(
+            "INSERT INTO unanswered_questions (question, user_id, chat_id) VALUES (?, ?, ?)",
+            (question[:500], user_id, chat_id)
+        )
+        await self.db.commit()
+
+    async def get_unanswered(self, limit: int = 50) -> list[dict]:
+        try:
+            async with self.db.execute(
+                "SELECT * FROM unanswered_questions WHERE status = 'pending' ORDER BY asked_at LIMIT ?",
+                (limit,)
+            ) as c:
+                return [dict(r) for r in await c.fetchall()]
+        except:
+            return []
+
+    async def mark_unanswered_done(self, qid: int):
+        await self.db.execute(
+            "UPDATE unanswered_questions SET status = 'reviewed' WHERE id = ?", (qid,)
+        )
+        await self.db.commit()
+
+    async def get_all_intent_names(self) -> list[str]:
+        try:
+            async with self.db.execute(
+                "SELECT DISTINCT intent FROM offline_answers ORDER BY intent"
+            ) as c:
+                return [r["intent"] for r in await c.fetchall()]
+        except:
+            return []
+
+    # ─── User Profile ───
+
+    async def get_user_profile(self, user_id: int) -> dict | None:
+        async with self.db.execute(
+            "SELECT user_id, username, full_name, message_count, ai_usage_count, first_seen, last_seen "
+            "FROM group_users WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1", (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row: return dict(row)
+        return None
+
+    async def increment_user_ai_usage(self, user_id: int):
+        try:
+            await self.db.execute("UPDATE group_users SET ai_usage_count = ai_usage_count + 1 WHERE user_id = ?", (user_id,))
+            await self.db.commit()
+        except: pass
+
+    async def get_user_groups_count(self, user_id: int) -> int:
+        async with self.db.execute("SELECT COUNT(DISTINCT chat_id) as cnt FROM group_users WHERE user_id = ?", (user_id,)) as c:
+            row = await c.fetchone()
+            return row["cnt"] if row else 0
+
+    # ─── Stats ───
+
+    async def count_today_users(self) -> int:
+        try:
+            async with self.db.execute(
+                "SELECT COUNT(DISTINCT user_id) as cnt FROM group_users WHERE date(last_seen) = date('now')"
+            ) as c:
+                return (await c.fetchone())["cnt"]
+        except: return 0
+
+    async def count_online_users(self, minutes: int = 30) -> int:
+        try:
+            async with self.db.execute(
+                "SELECT COUNT(DISTINCT user_id) as cnt FROM group_users WHERE last_seen > datetime('now', ?)",
+                (f"-{minutes} minutes",)
+            ) as c:
+                return (await c.fetchone())["cnt"]
+        except: return 0
+
+    async def count_ai_requests_today(self) -> int:
+        try:
+            async with self.db.execute(
+                "SELECT COUNT(*) as cnt FROM ai_log WHERE date(created_at) = date('now')"
+            ) as c:
+                return (await c.fetchone())["cnt"]
+        except: return 0
+
+    async def count_offline_responses_today(self) -> int:
+        try:
+            async with self.db.execute(
+                "SELECT COUNT(*) as cnt FROM ai_log WHERE date(created_at) = date('now') AND response_type = 'offline'"
+            ) as c:
+                return (await c.fetchone())["cnt"]
+        except: return 0
+
+    async def get_provider_stats(self) -> list[dict]:
+        try:
+            async with self.db.execute(
+                "SELECT provider, COUNT(*) as total, "
+                "SUM(CASE WHEN response_type = 'ai' THEN 1 ELSE 0 END) as success "
+                "FROM ai_log WHERE date(created_at) = date('now') AND provider != '' "
+                "GROUP BY provider"
+            ) as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
+
+    # ─── AI Log ───
+
+    async def log_ai_request(self, user_id: int, question: str, answer: str, provider: str = "", latency: float = 0, response_type: str = "ai"):
+        try:
+            await self.db.execute(
+                "INSERT INTO ai_log (user_id, question, answer, provider, latency, response_type) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, question[:100], answer[:200], provider, round(latency, 2), response_type)
+            )
+            await self.db.commit()
+        except: pass
+
+    async def get_ai_logs(self, limit: int = 50) -> list[dict]:
+        try:
+            async with self.db.execute(
+                "SELECT * FROM ai_log ORDER BY created_at DESC LIMIT ?", (limit,)
+            ) as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
+
+    # ─── AI Cache (SQLite persistence) ───
+
+    async def cache_qa_has(self, question: str) -> str | None:
+        import hashlib
+        h = hashlib.md5(question.encode()).hexdigest()
+        try:
+            async with self.db.execute("SELECT answer FROM ai_cache WHERE question_hash = ?", (h,)) as c:
+                row = await c.fetchone()
+                return row["answer"] if row else None
+        except: return None
+
+    async def cache_qa_set(self, question: str, answer: str):
+        import hashlib
+        h = hashlib.md5(question.encode()).hexdigest()
+        try:
+            await self.db.execute(
+                "INSERT OR REPLACE INTO ai_cache (question_hash, answer, created_at) VALUES (?, ?, datetime('now'))",
+                (h, answer)
+            )
+            await self.db.commit()
+        except: pass
+
+    async def cache_qa_cleanup(self, hours: int = 24):
+        try:
+            await self.db.execute("DELETE FROM ai_cache WHERE created_at < datetime('now', ?)", (f"-{hours} hours",))
+            await self.db.commit()
+        except: pass
+
+    # ─── Role-Based Permissions ───
+
+    async def set_user_role(self, user_id: int, role: str, chat_id: int = 0, assigned_by: int = 0):
+        await self.db.execute(
+            "INSERT OR REPLACE INTO user_roles (user_id, chat_id, role, assigned_by, assigned_at) VALUES (?, ?, ?, ?, datetime('now'))",
+            (user_id, chat_id, role, assigned_by)
+        )
+        await self.db.commit()
+
+    async def get_user_role(self, user_id: int, chat_id: int = 0) -> str:
+        async with self.db.execute(
+            "SELECT role FROM user_roles WHERE user_id = ? AND chat_id = ?", (user_id, chat_id)
+        ) as c:
+            row = await c.fetchone()
+            return row["role"] if row else "user"
+
+    async def remove_user_role(self, user_id: int, chat_id: int = 0):
+        await self.db.execute("DELETE FROM user_roles WHERE user_id = ? AND chat_id = ?", (user_id, chat_id))
+        await self.db.commit()
+
+    async def get_users_by_role(self, role: str, chat_id: int = 0) -> list[int]:
+        async with self.db.execute(
+            "SELECT user_id FROM user_roles WHERE role = ? AND chat_id = ?", (role, chat_id)
+        ) as c:
+            return [r["user_id"] for r in await c.fetchall()]
+
+    async def get_all_roles_for_chat(self, chat_id: int) -> list[dict]:
+        async with self.db.execute(
+            "SELECT user_id, role, assigned_at FROM user_roles WHERE chat_id = ? ORDER BY assigned_at", (chat_id,)
+        ) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+    # ─── Admin Action Log ───
+
+    async def log_admin_action(self, user_id: int, chat_id: int, action: str, target_id: int = 0, reason: str = "", details: str = ""):
+        await self.db.execute(
+            "INSERT INTO admin_log (user_id, chat_id, action, target_id, reason, details) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, chat_id, action, target_id, reason[:200], details[:200])
+        )
+        await self.db.commit()
+
+    async def get_admin_logs(self, chat_id: int = 0, limit: int = 50) -> list[dict]:
+        if chat_id:
+            async with self.db.execute(
+                "SELECT * FROM admin_log WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?", (chat_id, limit)
+            ) as c:
+                return [dict(r) for r in await c.fetchall()]
+        async with self.db.execute(
+            "SELECT * FROM admin_log ORDER BY created_at DESC LIMIT ?", (limit,)
+        ) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+    # ─── Health Log ───
+
+    async def log_health_check(self, service: str, result: str):
+        try:
+            await self.db.execute(
+                "INSERT INTO health_log (service, result) VALUES (?, ?)", (service, result)
+            )
+            await self.db.commit()
+        except: pass
+
+    async def get_health_history(self, service: str, limit: int = 50) -> list[dict]:
+        try:
+            async with self.db.execute(
+                "SELECT result, checked_at FROM health_log WHERE service = ? ORDER BY checked_at DESC LIMIT ?",
+                (service, limit)
+            ) as c:
+                return [dict(r) for r in await c.fetchall()]
+        except: return []
+
+    # ─── Provider Daily Stats ───
+
+    async def record_provider_result(self, provider: str, success: bool, latency: float = 0):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        try:
+            if success:
+                await self.db.execute(
+                    "INSERT INTO provider_daily_stats (date, provider, success_count, total_time) VALUES (?, ?, 1, ?) "
+                    "ON CONFLICT(date, provider) DO UPDATE SET success_count = success_count + 1, total_time = total_time + ?",
+                    (today, provider, latency, latency)
+                )
+            else:
+                await self.db.execute(
+                    "INSERT INTO provider_daily_stats (date, provider, failure_count, total_time) VALUES (?, ?, 1, ?) "
+                    "ON CONFLICT(date, provider) DO UPDATE SET failure_count = failure_count + 1, total_time = total_time + ?",
+                    (today, provider, latency, latency)
+                )
+            await self.db.commit()
+        except: pass
+
+    async def get_provider_stats_range(self, days: int = 7) -> list[dict]:
+        try:
+            async with self.db.execute(
+                "SELECT provider, SUM(success_count) as success, SUM(failure_count) as failure "
+                "FROM provider_daily_stats WHERE date >= date('now', ?) "
+                "GROUP BY provider ORDER BY success DESC",
+                (f"-{days} days",)
+            ) as c:
                 return [dict(r) for r in await c.fetchall()]
         except: return []
 

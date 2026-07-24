@@ -102,6 +102,13 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
             logger.debug(f"ask_with_routing: {provider}/{model} -> {tier} tier ({len(compressed)} msgs)")
             response = await _try_provider(provider, model, tiers[tier] or "", user_msg, compressed, hist_count)
             latency = _time.time() - _t0
+            # Record provider score for smart routing
+            try:
+                from handlers.ai_router import detect_intent
+                from handlers.provider_scorer import provider_scorer
+                intent = detect_intent(user_msg)
+                provider_scorer.record(provider, model, bool(response and not response.startswith(("⚠", "⏳"))), latency, intent)
+            except: pass
             if not response or response.startswith(("⚠", "⏳")):
                 last_error = response
                 health_score.record(model, False, latency)
@@ -118,6 +125,12 @@ async def ask_with_routing(user_msg: str, system_prompt: str, history: list, use
             last_error = str(e)
             health_score.record(c["model"], False, latency)
             record_error(c["provider"], c["model"], str(e))
+            # Record failure
+            try:
+                from handlers.provider_scorer import provider_scorer
+                from handlers.ai_router import detect_intent
+                provider_scorer.record(c["provider"], c["model"], False, latency, detect_intent(user_msg))
+            except: pass
             continue
 
     return last_error or "⚠️ همه مدل‌ها محدودیت دارن. بعداً امتحان کن."
@@ -140,6 +153,18 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+async def _idempotency_middleware(handler, event, data):
+    from handlers.idempotency import idempotency
+    if hasattr(event, "update_id"):
+        uid = event.update_id
+        if await idempotency.is_processed(uid):
+            return
+        result = await handler(event, data)
+        await idempotency.mark_processed(uid)
+        return result
+    return await handler(event, data)
 
 
 async def main():
@@ -172,31 +197,106 @@ async def main():
 
     dp.message.middleware(AntiFloodMiddleware())
 
-    dp.include_router(admin.router)
-    dp.include_router(admin_bot.router)
-    dp.include_router(persian_cmds.router)
+    # ─── Feature Flags ───
+    from handlers.feature_flags import feature_flags
+    await feature_flags.refresh()
+    logger.info("Feature flags loaded")
+
+    # ─── Idempotency middleware ───
+    from handlers.idempotency import idempotency
+    dp.update.outer_middleware(lambda handler, event, data: _idempotency_middleware(handler, event, data))
+
+    # ─── Group Management (no AI dependency) ───
+    from handlers.admin import router as admin_router
+    dp.include_router(admin_router)
+    from handlers import misc
     dp.include_router(misc.router)
-    dp.include_router(welcome.router)
+    from handlers import welcome as welcome_old
+    dp.include_router(welcome_old.router)
+    from handlers import rules
     dp.include_router(rules.router)
+    from handlers import spam
     dp.include_router(spam.router)
+    from handlers import custom
     dp.include_router(custom.router)
-    dp.include_router(persona.router)
+    from handlers import group_tracker
     dp.include_router(group_tracker.router)
+    from handlers import force_sub
     dp.include_router(force_sub.router)
+    from handlers import fun
     dp.include_router(fun.router)
+
+    # ─── AI Features (separate, may fail) ───
+    from handlers import admin_bot
+    dp.include_router(admin_bot.router)
+    from handlers import persian_cmds
+    dp.include_router(persian_cmds.router)
+    from handlers import persona
+    dp.include_router(persona.router)
+    from handlers import settings_panel
     dp.include_router(settings_panel.router)
     from handlers.admin_panel import router as admin_panel_router
     dp.include_router(admin_panel_router)
 
+    # ─── Plugin Loader ───
+    from handlers.plugin_loader import load_plugins
+    for plugin_router in load_plugins():
+        dp.include_router(plugin_router)
+
+    # ─── Scheduler (centralized) ───
+    from handlers.scheduler import run_scheduler
+    asyncio.create_task(run_scheduler())
+
     asyncio.create_task(reminder_worker())
     asyncio.create_task(scheduled_health_check())
+    from handlers.backup_manager import backup_worker
+    asyncio.create_task(backup_worker())
 
-    @dp.message(F.text, ~F.text.startswith("/"))
+    # ─── Health Monitor ───
+    from handlers.health_monitor import health_monitor_worker
+    asyncio.create_task(health_monitor_worker(bot))
+
+    # ─── AI Queue ───
+    from handlers.ai_queue import ai_queue
+    asyncio.create_task(ai_queue.start())
+
+    # ─── Auto Provider Discovery ───
+    from handlers.provider_discovery import discovery_worker
+    asyncio.create_task(discovery_worker())
+
+    # ─── AI Plugin System ───
+    from handlers.ai_plugin_system import load_plugins
+    load_plugins()
+    logger.info("AI plugins loaded")
+
+    # Daily cache cleanup
+    async def _cache_cleanup():
+        while True:
+            await asyncio.sleep(86400)
+            try:
+                await db.cache_qa_cleanup(48)
+                logger.info("Cache cleanup done")
+            except: pass
+    asyncio.create_task(_cache_cleanup())
+
+    # Persian admin commands that must never reach AI
+    _ADMIN_TEXT_CMDS = re.compile(r"^(بن|انبن|آنبن|سیک|سیکتیر|میوت|آنمیوت|آنمیت|پین|نگ|اخطار|حذف اخطار)(?:\s|$)", re.IGNORECASE)
+
+    @dp.message(
+        F.text,
+        ~F.text.startswith("/"),
+        ~F.text.regexp(_ADMIN_TEXT_CMDS),
+        F.chat.type.in_({"private", "group", "supergroup"}),
+    )
     async def ai_chat_handler(message: Message):
-        print(f"=== AI_CHAT FROM BOT.PY ===", flush=True)
         user_msg = message.text.strip()
 
-        if message.chat.type in ("group", "supergroup"):
+        # Private chats always go to AI (no group management needed)
+        if message.chat.type == "private":
+            pass  # continue to AI
+
+        # Group chats: only respond if mentioned, replied, name called, or greeted
+        elif message.chat.type in ("group", "supergroup"):
             try:
                 await db.add_group(message.chat.id, message.chat.title or "بدون نام", message.chat.username or "")
                 member_count = await message.bot.get_chat_member_count(message.chat.id)
@@ -224,8 +324,10 @@ async def main():
                 return
             if is_mention:
                 user_msg = user_msg.replace(f"@{bot_info.username}", "").strip()
-            elif is_reply:
-                pass
+
+        # Log only when AI will actually be invoked
+        logger.debug(f"AI chat: {message.from_user.id}: {user_msg[:50]}")
+        print(f"=== AI_CHAT FROM BOT.PY ===", flush=True)
 
         if not user_msg:
             user_msg = "سلام"

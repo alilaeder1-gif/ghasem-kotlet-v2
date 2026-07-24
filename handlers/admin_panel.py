@@ -125,6 +125,9 @@ _MAIN_MENU = [
     ("⚙️ تنظیمات زنده", "apanel_settings"),
     ("🧹 مدیریت حافظه", "apanel_memory"),
     ("🔐 تغییر PIN", "apanel_pin"),
+    ("📚 پاسخ‌های آماده", "apanel_offline"),
+    ("❓ سوالات بی‌جواب", "apanel_unanswered"),
+    ("🔀 Feature Flags", "apanel_feature_flags"),
 ]
 
 def _main_kb() -> InlineKeyboardMarkup:
@@ -197,6 +200,21 @@ async def cb_ai_status(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     pools = all_pools_status()
     lines = ["🤖 **وضعیت سرویس‌های AI**\n"]
+
+    # Provider health from scheduler
+    try:
+        from handlers.key_scheduler import get_provider_status
+        prov_status = get_provider_status()
+        if prov_status:
+            lines.append("**🔄 وضعیت لحظه‌ای Providerها:**")
+            icons = {"healthy": "🟢", "ratelimit": "🟡", "dead": "🔴", "no_keys": "⚪", "unknown": "🔵", "timeout": "🟠"}
+            for prov, st in sorted(prov_status.items()):
+                icon = icons.get(st, "❓")
+                lines.append(f"  {icon} {prov}: {st}")
+            lines.append("")
+    except ImportError:
+        pass
+
     for name, info in pools.items():
         emoji = "🟢" if info["total"] > 0 and info["healthy"] == info["total"] else ("🟡" if info["healthy"] > 0 else "🔴")
         lines.append(f"{emoji} **{name}**: {info['healthy']}/{info['total']} سالم")
@@ -420,23 +438,126 @@ async def cb_users_stats(cq: CallbackQuery):
 @router.callback_query(F.data == "apanel_stats")
 async def cb_stats(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
-    pools = all_pools_status()
-    total_calls = sum(p["total_calls"] for p in pools.values())
+    today_users = await db.count_today_users()
+    online_users = await db.count_online_users(30)
+    ai_reqs = await db.count_ai_requests_today()
+    offline_reqs = await db.count_offline_responses_today()
+    prov_stats = await db.get_provider_stats()
+    groups = await db.get_group_count()
+    all_users = await db.get_all_users()
+    total_users = len(all_users)
+
+    # Messages today (from ai_log + qa_memory)
+    msg_today = 0
+    try:
+        async with db.db.execute("SELECT COUNT(*) as cnt FROM qa_memory WHERE date(created_at) = date('now')") as c:
+            row = await c.fetchone()
+            msg_today = row["cnt"] if row else 0
+    except: pass
+
+    # Failover count (cached in _stats)
+    failover_count = sum(1 for l in _stats.error_log if l.get("error", "")) if _stats.error_log else 0
+
+    # Most used model
+    most_used = "—"
+    try:
+        async with db.db.execute(
+            "SELECT provider, COUNT(*) as cnt FROM ai_log GROUP BY provider ORDER BY cnt DESC LIMIT 1"
+        ) as c:
+            row = await c.fetchone()
+            if row: most_used = f"{row['provider']} ({row['cnt']})"
+    except: pass
+
+    # Health status
+    health_line = ""
+    try:
+        from handlers.health_monitor import get_health_summary
+        hs = get_health_summary()
+        if hs:
+            icons = {"healthy": "🟢", "ratelimit": "🟡", "unauthorized": "🔴", "no_keys": "⚪", "disabled": "⚪"}
+            health_line = "  ".join(f"{icons.get(v.split(':')[0], '❓')}{k}" for k, v in hs.items())
+    except: pass
+
+    # Queue stats
+    queue_line = ""
+    try:
+        from handlers.ai_queue import ai_queue
+        qs = ai_queue.stats()
+        if qs["processed"] > 0:
+            queue_line = f"📦 صف: {qs['queued']} منتظر | {qs['active']} فعال | {qs['avg_wait_sec']}s انتظار"
+    except: pass
+
+    lines = ["📊 **داشبورد آمار**\n"]
+
+    # Section 1: Users
+    lines.append("**👥 کاربران**")
+    lines.append(f"کل: `{total_users}` | امروز: `{today_users}` | آنلاین: `{online_users}`")
+    lines.append(f"گروه‌ها: `{groups}` | پیام‌های امروز: `{msg_today}`\n")
+
+    # Section 2: AI
+    lines.append("**🤖 هوش مصنوعی**")
+    total_reqs = ai_reqs + offline_reqs
+    success_pct = round(ai_reqs / total_reqs * 100, 1) if total_reqs else 0
+    fail_pct = round(100 - success_pct, 1) if total_reqs else 0
+    lines.append(f"🟢 AI: `{ai_reqs}` | 📚 Offline: `{offline_reqs}` | ✅ موفقیت: `{success_pct}%`")
+    lines.append(f"🔄 Failover: `{failover_count}` | 🏆 پرمصرف: `{most_used}`")
+    if queue_line:
+        lines.append(queue_line)
+
+    # Section 3: Provider breakdown — 24h / 7d / 30d
+    lines.append(f"\n**📡 موفقیت Provider:**")
+    lines.append(f"{'Provider':<14} {'24h':<8} {'7d':<8} {'30d':<8}")
+    try:
+        range_24h = await db.get_provider_stats_range(1)
+        range_7d = await db.get_provider_stats_range(7)
+        range_30d = await db.get_provider_stats_range(30)
+        stats_map_24h = {r["provider"]: r for r in range_24h}
+        stats_map_7d = {r["provider"]: r for r in range_7d}
+        stats_map_30d = {r["provider"]: r for r in range_30d}
+        all_provs = set(list(stats_map_24h.keys()) + list(stats_map_7d.keys()) + list(stats_map_30d.keys()))
+        for prov in sorted(all_provs):
+            def _pct(d: dict) -> str:
+                total = d.get("success", 0) + d.get("failure", 0)
+                if not total: return "—"
+                p = d["success"] / total * 100
+                return f"{p:.0f}%"
+            p24 = _pct(stats_map_24h.get(prov, {}))
+            p7 = _pct(stats_map_7d.get(prov, {}))
+            p30 = _pct(stats_map_30d.get(prov, {}))
+            lines.append(f"{prov:<14} {p24:<8} {p7:<8} {p30:<8}")
+    except: pass
+
+    # Section 4: Token usage
     total_tokens = 0
-    lines = ["📊 **آمار مصرف**\n"]
+    provider_breakdown = []
     for provider in ["gemini", "groq", "openrouter"]:
         pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
         if not pool: continue
+        prov_toks = 0
         for k in pool.keys:
             u = daily_usage.get_usage(k.key)
-            if u["calls"] > 0:
+            if u and u["calls"] > 0:
+                prov_toks += u["tokens"]
                 total_tokens += u["tokens"]
-                lines.append(f"• {provider} ...{k.key[-8:]}: {u['calls']} calls / {u['tokens']} tok")
-    lines.append(f"\n📞 کل: `{total_calls}` calls")
-    lines.append(f"💎 توکن امروز: `{total_tokens}`")
+        if prov_toks > 0:
+            provider_breakdown.append(f"{provider}: {prov_toks:,}")
+    lines.append(f"\n**💰 مصرف و هزینه**")
+    lines.append(f"💎 توکن امروز: `{total_tokens:,}`")
+    if provider_breakdown:
+        lines.append(f"   " + " | ".join(provider_breakdown))
     cost_est = round(total_tokens * 0.000002, 4)
-    lines.append(f"💰 هزینه تخمینی: `${cost_est}`")
-    lines.append(f"⚡ میانگین پاسخ: `{_stats.avg_response()}s`")
+    lines.append(f"💵 هزینه تخمینی: `${cost_est}`")
+
+    # Section 5: Performance
+    lines.append(f"\n**⚡ عملکرد**")
+    lines.append(f"میانگین پاسخ: `{_stats.avg_response()}s`")
+    lines.append(f"آخرین خطا: `{_stats.last_error or '—'}`")
+
+    # Section 6: Live health
+    if health_line:
+        lines.append(f"\n**🩺 وضعیت سیستمی**")
+        lines.append(health_line)
+
     await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=_back())
 
 # ═══════════════════════════════════════════
@@ -514,15 +635,42 @@ async def cb_prompt_reset(cq: CallbackQuery):
 @router.callback_query(F.data == "apanel_logs")
 async def cb_logs(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
+    b = InlineKeyboardBuilder()
+    b.button(text="🔴 خطاها", callback_data="apanel_logs_errors")
+    b.button(text="🤖 درخواست‌های AI", callback_data="apanel_logs_ai")
+    b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(2)
+    await cq.message.edit_text("📝 **لاگ‌ها**\n\nکدوم لاگ رو می‌خوای ببینی؟", reply_markup=b.as_markup())
+
+@router.callback_query(F.data == "apanel_logs_errors")
+async def cb_logs_errors(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
     logs = _stats.get_logs(30)
     if not logs:
-        return await cq.message.edit_text("📝 **لاگ خطاها**\n\nهیچ خطایی ثبت نشده.", reply_markup=_back())
+        return await cq.message.edit_text("📝 **لاگ خطاها**\n\nهیچ خطایی ثبت نشده.", reply_markup=_back("apanel_logs"))
     lines = ["📝 **آخرین خطاها**\n"]
     for log in logs[-20:]:
         emoji = "🔴" if "fail" in log["error"].lower() or "4" in log["error"][:1] else "🟡"
         lines.append(f"{emoji} {log['time']} {log['provider']} {log['model'][:25]}")
         lines.append(f"   `{log['error'][:60]}`")
-    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=_back())
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=_back("apanel_logs"))
+
+@router.callback_query(F.data == "apanel_logs_ai")
+async def cb_logs_ai(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    logs = await db.get_ai_logs(30)
+    if not logs:
+        return await cq.message.edit_text("📝 **لاگ AI**\n\nهیچ درخواستی ثبت نشده.", reply_markup=_back("apanel_logs"))
+    lines = ["📝 **آخرین درخواست‌های AI**\n"]
+    for log in logs[:20]:
+        ts = log.get("created_at", "")[11:19] if log.get("created_at") else ""
+        prov = log.get("provider", "") or "-"
+        rtype = {"ai": "🤖", "offline": "📚", "cache": "⚡"}.get(log.get("response_type", ""), "❓")
+        lat = log.get("latency", 0)
+        q = log.get("question", "")[:30]
+        lines.append(f"{rtype} {ts} [{prov}] {lat}s")
+        lines.append(f"   `{q}`")
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=_back("apanel_logs"))
 
 # ═══════════════════════════════════════════
 # 8. BROADCAST
@@ -567,6 +715,39 @@ async def cb_set_ask(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     key = cq.data.split("_", 2)[-1]
     _pending[cq.from_user.id] = ("set", key)
+
+# ═══════════════════════════════════════════
+# FEATURE FLAGS
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "apanel_feature_flags")
+async def cb_feature_flags(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    from handlers.feature_flags import feature_flags
+    b = InlineKeyboardBuilder()
+    lines = ["🔀 **Feature Flags**\n\nهر قابلیت رو بدون Deploy روشن/خاموش کن.\n"]
+    flags = {
+        "AI Chat": "ai_chat", "Anti Spam": "anti_spam", "Anti Link": "anti_link",
+        "Anti Flood": "anti_flood", "Broadcast": "broadcast", "Welcome": "welcome",
+        "Health Monitor": "health_monitor", "AI Queue": "ai_queue", "Backup": "backup",
+    }
+    for label, key in flags.items():
+        enabled = await feature_flags.is_enabled(key)
+        icon = "✅" if enabled else "❌"
+        lines.append(f"{icon} {label}")
+        b.button(text=f"{'✅' if enabled else '❌'} {label}", callback_data=f"apanel_flag_{key}")
+    b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(1)
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=b.as_markup())
+
+@router.callback_query(F.data.startswith("apanel_flag_"))
+async def cb_flag_toggle(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    flag = cq.data.split("_", 2)[-1]
+    from handlers.feature_flags import feature_flags
+    new_val = await feature_flags.toggle(flag)
+    await cq.answer(f"{'✅' if new_val else '❌'} {flag}: {'ON' if new_val else 'OFF'}", show_alert=True)
+    await cb_feature_flags(cq)
     await cq.message.edit_text(f"✏️ **مقدار جدید برای `{key}`**", reply_markup=_back())
 
 # ═══════════════════════════════════════════
@@ -654,6 +835,108 @@ async def cb_pin_remove(cq: CallbackQuery):
     await cb_pin_menu(cq)
 
 # ═══════════════════════════════════════════
+# OFFLINE ANSWERS MANAGER
+# ═══════════════════════════════════════════
+
+def _clear_kb_cache():
+    try:
+        from handlers.knowledge_engine import clear_cache
+        clear_cache()
+    except ImportError:
+        pass
+    try:
+        from handlers.intent_engine import clear_cache as clear_intent_cache
+        clear_intent_cache()
+    except ImportError:
+        pass
+
+@router.callback_query(F.data == "apanel_offline")
+async def cb_offline_menu(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    answers = await db.get_all_offline_answers()
+    lines = ["📚 **پاسخ‌های آماده (Offline)**\n\n"]
+    b = InlineKeyboardBuilder()
+    for a in answers:
+        intent = a["intent"]
+        answer_preview = a["answer"][:30]
+        lines.append(f"• `{intent}`: {answer_preview}...")
+        b.button(text=f"✏️ {intent}", callback_data=f"apanel_off_edit_{a['id']}")
+        b.button(text=f"❌ {intent}", callback_data=f"apanel_off_del_{a['id']}")
+    lines.append(f"\n{len(answers)} پاسخ آماده")
+    b.button(text="➕ جدید", callback_data="apanel_off_add")
+    b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(2)
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=b.as_markup())
+
+@router.callback_query(F.data == "apanel_off_add")
+async def cb_off_add(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    _pending[cq.from_user.id] = "offline_new_intent"
+    await cq.message.edit_text("✏️ **اسم intent رو بفرست** (مثلاً: greeting, farewell, price)\n\nاین دسته‌بندی پاسخه.", reply_markup=_back("apanel_offline"))
+
+@router.callback_query(F.data.startswith("apanel_off_edit_"))
+async def cb_off_edit(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    aid = int(cq.data.split("_")[-1])
+    _pending[cq.from_user.id] = ("offline_edit", aid)
+    await cq.message.edit_text("✏️ **متن جدید پاسخ رو بفرست**\n\nفرمت: intent | triggers | answer\nمثال: greeting | سلام,درود,hi | سلام داداش!", reply_markup=_back("apanel_offline"))
+
+@router.callback_query(F.data.startswith("apanel_off_del_"))
+async def cb_off_del(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    aid = int(cq.data.split("_")[-1])
+    await db.delete_offline_answer(aid)
+    await cq.answer("✅ حذف شد.", show_alert=True)
+    await cb_offline_menu(cq)
+
+# ═══════════════════════════════════════════
+# UNANSWERED QUESTIONS
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "apanel_unanswered")
+async def cb_unanswered(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    unanswered = await db.get_unanswered()
+    if not unanswered:
+        return await cq.message.edit_text("✅ هیچ سوال بی‌جوابی وجود ندارد.", reply_markup=_back("apanel_back"))
+    lines = ["❓ **سوالات بی‌جواب**\n\n"]
+    b = InlineKeyboardBuilder()
+    for q in unanswered:
+        qid = q["id"]
+        question = q["question"][:40]
+        user_id = q["user_id"]
+        lines.append(f"• [{qid}] {question}... (👤 {user_id})")
+        b.button(text=f"✅ {qid}", callback_data=f"apanel_unans_done_{qid}")
+        b.button(text=f"➕ {qid}", callback_data=f"apanel_unans_add_{qid}")
+    b.button(text="🔙 برگشت", callback_data="apanel_back")
+    b.adjust(2)
+    await cq.message.edit_text("\n".join(lines)[:4000], reply_markup=b.as_markup())
+
+@router.callback_query(F.data.startswith("apanel_unans_done_"))
+async def cb_unans_done(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    qid = int(cq.data.split("_")[-1])
+    await db.mark_unanswered_done(qid)
+    await cq.answer("✅ بررسی شد.", show_alert=True)
+    await cb_unanswered(cq)
+
+@router.callback_query(F.data.startswith("apanel_unans_add_"))
+async def cb_unans_add(cq: CallbackQuery):
+    if not _check(cq.from_user.id): return
+    qid = int(cq.data.split("_")[-1])
+    unanswered = await db.get_unanswered(limit=100)
+    q = next((u for u in unanswered if u["id"] == qid), None)
+    if not q:
+        return await cq.answer("❌ یافت نشد.", show_alert=True)
+    _pending[cq.from_user.id] = ("unans_new_intent", qid, q["question"])
+    await cq.message.edit_text(
+        f"✏️ سوال: `{q['question'][:100]}`\n\n"
+        f"**اسم intent رو بفرست** (مثلاً: price, support, vpn)\n\n"
+        f"این دسته‌بندی برای پاسخ به این سوال استفاده می‌شه.",
+        reply_markup=_back("apanel_unanswered")
+    )
+
+# ═══════════════════════════════════════════
 # PENDING MESSAGE HANDLER
 # ═══════════════════════════════════════════
 
@@ -695,12 +978,18 @@ async def pending_handler(message: Message):
     try:
         if action == "users_search":
             uid_search = int(text)
-            users = await db.get_all_users()
-            user = next((u for u in users if u.get("user_id") == uid_search), None)
-            if not user:
+            profile = await db.get_user_profile(uid_search)
+            if not profile:
                 return await message.answer("❌ کاربر پیدا نشد.", reply_markup=_back())
             mem = await db.get_user_memory(uid_search, 0)
             mem_size = len(mem or "")
+            groups = await db.get_user_groups_count(uid_search)
+            banned = await db.is_banned(0, uid_search)
+            status = "🚫 Blocked" if banned else "🟢 Normal"
+            first_seen = (profile.get("first_seen") or "نامشخص")[:10]
+            last_seen = (profile.get("last_seen") or "نامشخص")[:16]
+            ai_count = profile.get("ai_usage_count", 0)
+            msg_count = profile.get("message_count", 0)
             b = InlineKeyboardBuilder()
             b.button(text="🚫 بلاک/رفع بلاک", callback_data=f"apanel_block_{uid_search}")
             b.button(text="🧹 پاک کردن حافظه", callback_data=f"apanel_memdo_{uid_search}")
@@ -708,13 +997,16 @@ async def pending_handler(message: Message):
             b.button(text="🔙 برگشت", callback_data="apanel_users")
             b.adjust(2)
             await message.answer(
-                f"👤 **User Inspector**\n\n"
-                f"🆔 `{user.get('user_id')}`\n"
-                f"👤 {user.get('full_name', 'نامشخص')}\n"
-                f"🏘 {user.get('groups', 0)} گروه\n"
+                f"👤 **پروفایل کاربر**\n\n"
+                f"🆔 `{uid_search}`\n"
+                f"👤 {profile.get('full_name', 'نامشخص')}\n"
+                f"🏘 `{groups}` گروه\n"
+                f"📝 `{msg_count}` پیام\n"
+                f"🤖 `{ai_count}` درخواست AI\n"
                 f"🧠 حافظه: `{mem_size}` کاراکتر\n"
-                f"📅 اولین حضور: `{(user.get('first_seen') or 'نامشخص')[:10]}`\n"
-                f"🕐 آخرین بازدید: `{(user.get('last_seen') or 'نامشخص')[:16]}`",
+                f"📅 عضویت: `{first_seen}`\n"
+                f"🕐 آخرین فعالیت: `{last_seen}`\n"
+                f"وضعیت: {status}",
                 reply_markup=b.as_markup()
             )
             return
@@ -755,6 +1047,14 @@ async def pending_handler(message: Message):
                 await message.bot.send_message(chat_id, text)
                 return await message.answer("✅ پیام ارسال شد.", reply_markup=_back())
 
+            elif act_type == "offline_new_answer":
+                intent = action[1]
+                triggers = action[2]
+                answer = text.strip()
+                await db.add_offline_answer(intent, triggers, answer, priority=2)
+                _clear_kb_cache()
+                return await message.answer("✅ پاسخ ذخیره شد.", reply_markup=_back("apanel_offline"))
+
         elif action == "broadcast":
             groups = await db.get_all_groups()
             sent = failed = 0
@@ -777,6 +1077,44 @@ async def pending_handler(message: Message):
             await _set_pin_hash(text)
             _PIN_SESSION[uid] = time.time()
             return await _show_dashboard(message)
+
+        elif action == "offline_new_intent":
+            parts = text.split("|")
+            intent = parts[0].strip()
+            triggers = parts[1].strip() if len(parts) > 1 else intent
+            answer = parts[2].strip() if len(parts) > 2 else ""
+            if not answer:
+                _pending[uid] = ("offline_new_answer", intent, triggers)
+                return await message.answer("✏️ **متن پاسخ رو بفرست**", reply_markup=_back("apanel_offline"))
+            await db.add_offline_answer(intent, triggers, answer, priority=2)
+            _clear_kb_cache()
+            return await message.answer("✅ پاسخ ذخیره شد.", reply_markup=_back("apanel_offline"))
+
+        elif isinstance(action, tuple) and action[0] == "unans_new_intent":
+            qid = action[1]
+            question = action[2]
+            intent = text.strip()
+            if not intent:
+                return await message.answer("❌ اسم intent نمی‌تونه خالی باشه.", reply_markup=_back("apanel_unanswered"))
+            triggers = question[:200]
+            _pending[uid] = ("unans_new_answer", qid, intent, triggers)
+            return await message.answer(
+                f"✏️ **متن پاسخ رو برای intent `{intent}` بفرست**\n\n"
+                f"سوال اصلی: `{question[:100]}`",
+                reply_markup=_back("apanel_unanswered")
+            )
+
+        elif isinstance(action, tuple) and action[0] == "unans_new_answer":
+            qid = action[1]
+            intent = action[2]
+            triggers = action[3]
+            answer = text.strip()
+            if not answer:
+                return await message.answer("❌ پاسخ نمی‌تونه خالی باشه.", reply_markup=_back())
+            await db.add_offline_answer(intent, triggers, answer, priority=2)
+            await db.mark_unanswered_done(qid)
+            _clear_kb_cache()
+            return await message.answer("✅ پاسخ ذخیره و سوال از صف بی‌جواب حذف شد.", reply_markup=_back("apanel_unanswered"))
 
     except ValueError:
         return await message.answer("❌ آیدی کاربر باید عدد باشه.", reply_markup=_back())

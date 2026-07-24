@@ -6,6 +6,7 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
 from database import db
+from handlers.permissions import is_global_admin
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -212,7 +213,7 @@ async def list_reminders(message: Message):
 
 @router.message(Command("history"))
 async def cmd_history(message: Message):
-    if message.from_user.id not in [int(x) for x in __import__('os').getenv('ADMIN_IDS', '').split(',') if x.strip()]:
+    if not is_global_admin(message.from_user.id):
         return await message.reply("فقط ادمین اصلی می‌تونه ببینه.")
 
     try:
