@@ -493,13 +493,14 @@ async def show_admin_access(msg_or_cq, chat_id):
         except:
             pass
         uname = f"@{user.username}" if user.username else user.full_name
-        has_acc = user.id in granted or is_creator_user
+        uid = user.id
+        has_acc = uid in granted or is_creator_user
         mark = "✅" if has_acc else "❌"
-        text += f"  {mark} {uname}\n"
-        if not is_creator_user and user.id != msg_or_cq.bot.id:
-            uname_display = f"@{user.username}" if user.username else user.full_name[:15]
+        text += f"  {mark} {uname} (`{uid}`)\n"
+        if not is_creator_user and uid != msg_or_cq.bot.id:
+            uname_display = f"@{user.username}" if user.username else user.full_name[:12]
             btn_text = f"{'🔴' if has_acc else '🟢'} {uname_display}"
-            b.button(text=btn_text, callback_data=f"sp|toggle_admin|{user.id}|{chat_id}")
+            b.button(text=btn_text, callback_data=f"sp|toggle_admin|{uid}|{chat_id}")
 
     if not is_creator:
         text += "\n⚠️ فقط صاحب گروه میتونه دسترسی رو تغییر بده."
