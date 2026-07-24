@@ -20,7 +20,7 @@ async def _real_test_gemini() -> str:
         from handlers.key_pool import gemini_pool
         key = gemini_pool.get_key()
         if not key: return "no_keys"
-        genai.configure(api_key=key.key)
+        genai.configure(api_key=key)
         model = genai.GenerativeModel("gemini-2.0-flash")
         resp = model.generate_content("سلام! چطوری؟ در یک جمله جواب بده.", generation_config={"max_output_tokens": 30})
         if resp and resp.text and len(resp.text) > 3:
@@ -42,7 +42,7 @@ async def _real_test_groq() -> str:
         import requests
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key.key}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "user", "content": "سلام! چطوری؟ در یک جمله جواب بده."}],
@@ -75,7 +75,7 @@ async def _real_test_openrouter() -> str:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {key.key}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "https://github.com/alilaeder1-gif/ghasem-kotlet-v2",
             },
