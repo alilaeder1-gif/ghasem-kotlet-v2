@@ -33,13 +33,6 @@ from handlers.key_pool import groq_pool, openrouter_pool
 from handlers.ai_gateway import smart_route, daily_usage, health_score, make_tiers, TokenBudget
 from handlers.token_estimator import estimate_tokens
 from handlers.admin_panel import record_request, record_error
-from handlers import response_quality as rq_mod
-from handlers import response_judge as judge_mod
-from handlers import cost_optimizer as cost_mod
-from handlers import ab_test as ab_mod
-from handlers import emergency_mode as em_mod
-from handlers.ai_chat import _call_google, _call_deepseek, _get_openrouter, _get_groq, _call_groq, OPENROUTER_MODELS
-from handlers.key_pool import groq_pool, openrouter_pool
 
 
 async def _build_ai_prompt(settings: dict, persona_prompt: str = None, chat_id: int = None, emotion: str = None, context: dict = None) -> str:
@@ -364,10 +357,10 @@ async def main():
             return
 
         # Response Quality Check (failover if bad)
-            if rq_mod.needs_failover(response, user_msg, emotion):
-                response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
-            if not response or response.startswith(("⚠", "⏳")):
-                return
+        if rq_mod.needs_failover(response, user_msg, emotion):
+            response = await ask_with_routing(user_msg, system_prompt, history, user_memory, qa_context, route_decision, fallback_prompt=lite_prompt)
+        if not response or response.startswith(("⚠", "⏳")):
+            return
 
         # Quality Gate
         humor_used = emotion not in ("annoyed", "sad", "angry")

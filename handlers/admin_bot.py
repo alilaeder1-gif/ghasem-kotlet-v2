@@ -3,6 +3,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from database import db
 from config import ADMIN_IDS
+from handlers.admin_panel import _main_kb
 
 router = Router()
 
@@ -55,14 +56,14 @@ async def admin_menu(message: Message):
         return
     if message.from_user.id not in ADMIN_IDS:
         return
-    await message.answer("🔐 **پنل مدیریت بات**", reply_markup=_menu_kb())
+    await message.answer("🏠 **داشبورد مدیریت کتلت**\nاز منوی زیر گزینه مورد نظر رو انتخاب کن.", reply_markup=_main_kb())
 
 
 @router.callback_query(F.data == "admin_back")
 async def cb_back(cq: CallbackQuery):
     if cq.from_user.id not in ADMIN_IDS:
         return await cq.answer("❌ دسترسی نداری", show_alert=True)
-    await cq.message.edit_text("🔐 **پنل مدیریت بات**", reply_markup=_menu_kb())
+    await cq.message.edit_text("🏠 **داشبورد مدیریت کتلت**\nاز منوی زیر گزینه مورد نظر رو انتخاب کن.", reply_markup=_main_kb())
 
 
 # ─── لیست گروه‌ها ───
