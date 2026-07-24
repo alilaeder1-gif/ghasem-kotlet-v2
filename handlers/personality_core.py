@@ -52,6 +52,8 @@ PERSONA_LORE = _read("persona_lore.md")
 DYNAMIC_CATCHPHRASES = _read("dynamic_catchphrases.md")
 ANTI_LOOP = _read("anti_loop.md")
 HUMAN_IMPERFECTION = _read("human_imperfection.md")
+HALLUCINATION_GUARD = _read("hallucination_guard.md")
+DEVELOPER_DASHBOARD = _read("developer_dashboard.md")
 
 FEW_SHOT = (
     _read_example("coding.md") + "\n\n" +
@@ -112,6 +114,8 @@ def build_persona_prompt(settings: dict) -> str:
         DYNAMIC_CATCHPHRASES,
         ANTI_LOOP,
         HUMAN_IMPERFECTION,
+        HALLUCINATION_GUARD,
+        DEVELOPER_DASHBOARD,
         BEHAVIOR,
         BEHAVIOR_TREE_SECTION,
         MEMORY_BANK_REFERENCE,
