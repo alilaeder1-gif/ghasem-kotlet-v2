@@ -344,6 +344,7 @@ class Database:
             INSERT OR IGNORE INTO providers (name) VALUES ('sambanova');
             INSERT OR IGNORE INTO providers (name) VALUES ('cloudflare');
             INSERT OR IGNORE INTO providers (name) VALUES ('deepinfra');
+            INSERT OR IGNORE INTO providers (name) VALUES ('huggingface');
             INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('greeting', 'سلام,درود,هی,hi,hello,سلا م,salam', 'سلام داداش! چطوری؟ 😎', 1);
             INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('farewell', 'خداحافظ,فعلا,بای,bye,می‌رم,برم', 'فعلاً... بعداً می‌بینمت! 🤙', 1);
             INSERT OR IGNORE INTO offline_answers (intent, triggers, answer, priority) VALUES ('help', 'کمک,راهنما,چی کار می‌کنی,چه کارا,help,دستور', 'من کتلت‌م! می‌تونم باهات حرف بزنم، شوخی کنم، سوالات عمومی رو جواب بدم. تو گروه /ghasemkotlet رو به ادمین بگو تا پنل مدیریت رو ببینه.', 1);
@@ -440,7 +441,7 @@ class Database:
 
     async def seed_api_keys_from_env(self):
         import os as _os
-        for provider, env_name in [("gemini", "GEMINI_KEYS"), ("groq", "GROQ_KEYS"), ("openrouter", "OPENROUTER_KEYS")]:
+        for provider, env_name in [("gemini", "GEMINI_KEYS"), ("groq", "GROQ_KEYS"), ("openrouter", "OPENROUTER_KEYS"), ("huggingface", "HF_API_KEY")]:
             pid = await self.get_provider_id(provider)
             if pid is None: continue
             raw = _os.getenv(env_name, "")

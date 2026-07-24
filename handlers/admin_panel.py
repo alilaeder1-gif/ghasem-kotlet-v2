@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from database import db
 from config import ADMIN_IDS
-from handlers.key_pool import all_pools_status, gemini_pool, groq_pool, openrouter_pool, KeyPool
+from handlers.key_pool import all_pools_status, gemini_pool, groq_pool, openrouter_pool, huggingface_pool, KeyPool
 from handlers.ai_gateway import daily_usage, health_score
 
 router = Router()
@@ -244,7 +244,7 @@ _OVERLAY_KEYS: dict[str, list[str]] = {}  # runtime key overrides
 @router.callback_query(F.data == "apanel_keys")
 async def cb_keys_menu(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
-    pools = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}
+    pools = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}
     lines = ["👑 **مدیریت API Keys**\n"]
     b = InlineKeyboardBuilder()
     for name, pool in pools.items():
@@ -266,7 +266,7 @@ async def cb_keys_menu(cq: CallbackQuery):
 async def cb_key_detail(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     provider = cq.data.split("_")[-1]
-    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
     if not pool: return
     lines = [f"👑 **{provider}** - {len(pool.keys)} کلید\n"]
     b = InlineKeyboardBuilder()
@@ -291,14 +291,21 @@ async def cb_key_add_ask(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     provider = cq.data.split("_")[-1]
     _pending[cq.from_user.id] = ("add_key", provider)
-    await cq.message.edit_text(f"✏️ **کلید جدید برای `{provider}` رو بفرست**", reply_markup=_back())
+    var_name = {"gemini": "GEMINI_API_KEY", "groq": "GROQ_API_KEY", "openrouter": "OPENROUTER_API_KEY", "huggingface": "HF_API_KEY"}.get(provider, provider.upper() + "_API_KEY")
+    await cq.message.edit_text(
+        f"✏️ **کلید جدید برای `{provider}`**\n\n"
+        f"فرمت: `{var_name}=your_key`\n"
+        f"فقط مقدار key رو بفرست (مثلاً `AIzaSy...`)\n"
+        f"یا با متغیر: `{var_name}=...`",
+        reply_markup=_back()
+    )
 
 @router.callback_query(F.data.startswith("apanel_key_del_"))
 async def cb_key_del(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     _, _, provider, idx = cq.data.split("_", 3)
     idx = int(idx)
-    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
     if pool and 0 <= idx < len(pool.keys):
         ks = pool.keys[idx]
         if ks.db_id:
@@ -316,7 +323,7 @@ async def cb_key_toggle(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     _, _, provider, idx = cq.data.split("_", 3)
     idx = int(idx)
-    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
     if pool and 0 <= idx < len(pool.keys):
         k = pool.keys[idx]
         k.healthy = not k.healthy
@@ -337,7 +344,7 @@ async def cb_key_toggle(cq: CallbackQuery):
 async def cb_key_revive(cq: CallbackQuery):
     if not _check(cq.from_user.id): return
     provider = cq.data.split("_")[-1]
-    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
     if not pool: return
     revived = 0
     for k in pool.keys:
@@ -360,7 +367,7 @@ async def cb_key_test(cq: CallbackQuery):
     parts = cq.data.split("_")
     provider = parts[3]
     idx = int(parts[4])
-    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+    pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
     if not pool or idx < 0 or idx >= len(pool.keys): return
     k = pool.keys[idx]
     await cq.answer("⏳ تست کلید...", show_alert=False)
@@ -531,7 +538,7 @@ async def cb_stats(cq: CallbackQuery):
     total_tokens = 0
     provider_breakdown = []
     for provider in ["gemini", "groq", "openrouter"]:
-        pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+        pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
         if not pool: continue
         prov_toks = 0
         for k in pool.keys:
@@ -1023,7 +1030,7 @@ async def pending_handler(message: Message):
 
             elif act_type == "add_key":
                 provider = action[1]
-                pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider)
+                pool = {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider)
                 if pool:
                     try:
                         await db.add_api_key(provider, text)

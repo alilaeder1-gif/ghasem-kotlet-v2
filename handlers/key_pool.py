@@ -165,13 +165,14 @@ class KeyPool:
 gemini_pool = KeyPool("gemini")
 groq_pool = KeyPool("groq")
 openrouter_pool = KeyPool("openrouter")
+huggingface_pool = KeyPool("huggingface")
 
 
 async def init_pools_from_db():
-    for pool in [gemini_pool, groq_pool, openrouter_pool]:
+    for pool in [gemini_pool, groq_pool, openrouter_pool, huggingface_pool]:
         await pool.load_from_db()
     # Fallback: if DB empty, seed from env
-    total = sum(len(p.keys) for p in [gemini_pool, groq_pool, openrouter_pool])
+    total = sum(len(p.keys) for p in [gemini_pool, groq_pool, openrouter_pool, huggingface_pool])
     if total == 0:
         logger.info("No keys in DB, seeding from env vars")
         from database import db
@@ -191,7 +192,7 @@ def classify_error(err_str: str) -> str:
 
 
 def get_pool(provider: str) -> KeyPool:
-    return {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool}.get(provider, gemini_pool)
+    return {"gemini": gemini_pool, "groq": groq_pool, "openrouter": openrouter_pool, "huggingface": huggingface_pool}.get(provider, gemini_pool)
 
 
 def all_pools_status() -> dict:
@@ -199,4 +200,5 @@ def all_pools_status() -> dict:
         "gemini": gemini_pool.status(),
         "groq": groq_pool.status(),
         "openrouter": openrouter_pool.status(),
+        "huggingface": huggingface_pool.status(),
     }

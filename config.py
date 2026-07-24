@@ -29,6 +29,8 @@ FLOOD_WINDOW = int(os.getenv("FLOOD_WINDOW", "10"))
 
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 
+HF_API_KEY = os.getenv("HF_API_KEY", "")
+
 # Live settings (changed via /panel without deploy)
 class LiveSettings:
     max_tokens = 256
