@@ -175,6 +175,14 @@ class Database:
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, chat_id)
             );
+
+            CREATE TABLE IF NOT EXISTS settings_access (
+                chat_id INTEGER,
+                user_id INTEGER,
+                granted_by INTEGER DEFAULT 0,
+                granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (chat_id, user_id)
+            );
         """)
         await self.db.commit()
         try:
@@ -527,6 +535,27 @@ class Database:
             (user_id, chat_id, memory)
         )
         await self.db.commit()
+
+
+    async def grant_settings_access(self, chat_id: int, user_id: int, granted_by: int = 0):
+        await self.db.execute(
+            "INSERT OR IGNORE INTO settings_access (chat_id, user_id, granted_by) VALUES (?, ?, ?)",
+            (chat_id, user_id, granted_by)
+        )
+        await self.db.commit()
+
+    async def revoke_settings_access(self, chat_id: int, user_id: int):
+        await self.db.execute("DELETE FROM settings_access WHERE chat_id = ? AND user_id = ?", (chat_id, user_id))
+        await self.db.commit()
+
+    async def has_settings_access(self, chat_id: int, user_id: int) -> bool:
+        async with self.db.execute("SELECT 1 FROM settings_access WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)) as cursor:
+            return await cursor.fetchone() is not None
+
+    async def list_settings_access(self, chat_id: int) -> list[int]:
+        async with self.db.execute("SELECT user_id FROM settings_access WHERE chat_id = ?", (chat_id,)) as cursor:
+            rows = await cursor.fetchall()
+            return [r["user_id"] for r in rows]
 
 
 db = Database()

@@ -65,6 +65,7 @@ async def show_main(msg_or_cq, chat_id, edit=True):
     b.button(text=f"{lk_st} 🔗 حذف لینک", callback_data=f"sp|link_set|{chat_id}")
     b.button(text=f"{fs_st} 📣 عضویت اجباری", callback_data=f"sp|forcesub_set|{chat_id}")
     b.button(text=f"🎭 شخصیت: {beh_name}", callback_data=f"sp|ai_personality|{chat_id}")
+    b.button(text="👮 دسترسی ادمین‌ها", callback_data=f"sp|admin_access|{chat_id}")
     b.adjust(2)
     kb = b.as_markup()
     if edit:
@@ -463,6 +464,56 @@ async def show_forcesub_settings(msg_or_cq, chat_id):
 
 
 # ═══════════════════════════════════════════════
+#  ADMIN ACCESS MANAGEMENT PAGE
+# ═══════════════════════════════════════════════
+
+async def show_admin_access(msg_or_cq, chat_id):
+    admins = []
+    try:
+        async for m in msg_or_cq.bot.get_chat_administrators(chat_id):
+            admins.append(m.user)
+    except:
+        return await msg_or_cq.answer("❌ خطا در دریافت لیست ادمین‌ها", show_alert=True)
+
+    granted = await db.list_settings_access(chat_id)
+    cm = await msg_or_cq.bot.get_chat_member(chat_id, msg_or_cq.from_user.id)
+    is_creator = cm.status == "creator"
+
+    text = "👮 **مدیریت دسترسی ادمین‌ها**\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\n"
+    text += "فقط ادمین‌هایی که دسترسی داشته باشن میتونن تنظیمات گروه رو تغییر بدن.\n"
+    text += "صاحب گروه میتونه دسترسی هر ادمین رو فعال/غیرفعال کنه.\n\n"
+    text += "**ادمین‌های گروه:**\n"
+
+    b = InlineKeyboardBuilder()
+    for user in admins:
+        is_creator_user = False
+        try:
+            m = await msg_or_cq.bot.get_chat_member(chat_id, user.id)
+            is_creator_user = m.status == "creator"
+        except:
+            pass
+        uname = f"@{user.username}" if user.username else user.full_name
+        has_acc = user.id in granted or is_creator_user
+        mark = "✅" if has_acc else "❌"
+        text += f"  {mark} {uname}\n"
+        if not is_creator_user and user.id != msg_or_cq.bot.id:
+            uname_display = f"@{user.username}" if user.username else user.full_name[:15]
+            btn_text = f"{'🔴' if has_acc else '🟢'} {uname_display}"
+            b.button(text=btn_text, callback_data=f"sp|toggle_admin|{user.id}|{chat_id}")
+
+    if not is_creator:
+        text += "\n⚠️ فقط صاحب گروه میتونه دسترسی رو تغییر بده."
+    text += "\n\n🔴 = بدون دسترسی | 🟢 = دسترسی دارد"
+    b.adjust(1)
+    b.button(text="🔙 بازگشت به تنظیمات", callback_data=f"sp|main|{chat_id}")
+
+    if is_creator:
+        await msg_or_cq.message.edit_text(text, reply_markup=b.as_markup())
+    else:
+        await msg_or_cq.message.edit_text(text, reply_markup=b.adjust(1).as_markup())
+
+
+# ═══════════════════════════════════════════════
 #  MAIN CALLBACK ROUTER
 # ═══════════════════════════════════════════════
 
@@ -476,6 +527,10 @@ async def settings_panel_cb(cq: CallbackQuery):
         cm = await cq.bot.get_chat_member(chat_id, cq.from_user.id)
         if cm.status not in ("creator", "administrator"):
             return await cq.answer("❌ فقط ادمین", show_alert=True)
+        if cm.status == "administrator":
+            has = await db.has_settings_access(chat_id, cq.from_user.id)
+            if not has:
+                return await cq.answer("❌ صاحب گروه دسترسی نداده", show_alert=True)
     except:
         return await cq.answer("❌ خطا", show_alert=True)
 
@@ -530,6 +585,25 @@ async def settings_panel_cb(cq: CallbackQuery):
 
     if action == "forcesub_set":
         await show_forcesub_settings(cq, chat_id)
+        return
+
+    if action == "admin_access":
+        await show_admin_access(cq, chat_id)
+        return
+
+    if action == "toggle_admin":
+        target_id = int(parts[2])
+        cm = await cq.bot.get_chat_member(chat_id, cq.from_user.id)
+        if cm.status != "creator":
+            return await cq.answer("❌ فقط صاحب گروه میتونه", show_alert=True)
+        has = await db.has_settings_access(chat_id, target_id)
+        if has:
+            await db.revoke_settings_access(chat_id, target_id)
+            await cq.answer(f"✅ دسترسی گرفته شد", show_alert=False)
+        else:
+            await db.grant_settings_access(chat_id, target_id, cq.from_user.id)
+            await cq.answer(f"✅ دسترسی داده شد", show_alert=False)
+        await show_admin_access(cq, chat_id)
         return
 
     if action == "flood_limit":
